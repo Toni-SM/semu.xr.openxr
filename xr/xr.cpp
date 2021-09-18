@@ -21,13 +21,16 @@
 #include <X11/Xlib.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
+#ifdef APPLICATION_IMAGE
 #include <SDL2/SDL_image.h>
+#endif
 #endif
 
 #include <vector>
 #include <stdio.h>
-#include <string.h> 
+#include <string.h>
 #include <iostream>
+#include <functional> 
 using namespace std;
 
 #include <openxr/openxr.h>
@@ -53,20 +56,27 @@ struct SwapchainHandler{
 #endif
 };
 
-bool xrCheckResult(XrInstance xr_instance, XrResult xr_result, const char * message = nullptr){
+vector<const char*> cast_to_vector_char_p(const vector<string> & input_list){
+	vector<const char*> output_list;
+	for (size_t i = 0; i < input_list.size(); i++)
+		output_list.push_back(input_list[i].data());
+	return output_list;
+}
+
+bool xrCheckResult(XrInstance xr_instance, XrResult xr_result, string message = ""){
 	if(XR_SUCCEEDED(xr_result))
 		return true;
 
-	if (xr_instance != NULL){
+	if(xr_instance != NULL){
 		char xr_result_as_string[XR_MAX_RESULT_STRING_SIZE];
 		xrResultToString(xr_instance, xr_result, xr_result_as_string);
-		if (message != NULL)
+		if(!message.empty())
 			std::cout << "FAILED with code: " << xr_result << " (" << xr_result_as_string << "). " << message << std::endl;
 		else
 			std::cout << "FAILED with code: " << xr_result << " (" << xr_result_as_string << ")" << std::endl;
 	}
 	else{
-		if (message != NULL)
+		if(!message.empty())
 			std::cout << "FAILED with code: " << xr_result << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#return-codes). " << message << std::endl;
 		else
 			std::cout << "FAILED with code: " << xr_result << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#return-codes)" << std::endl;
@@ -419,6 +429,7 @@ OpenGLHandler::~OpenGLHandler()
 }
 
 void OpenGLHandler::loadTexture(string path, GLuint * textureId){
+#ifdef APPLICATION_IMAGE
 	int mode = GL_RGB;
 	SDL_Surface *tex = IMG_Load(path.c_str());
     
@@ -436,6 +447,7 @@ void OpenGLHandler::loadTexture(string path, GLuint * textureId){
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+#endif
 }
 
 bool OpenGLHandler::checkShader(GLuint shader){
@@ -524,7 +536,6 @@ bool OpenGLHandler::getRequirements(XrInstance xr_instance, XrSystemId xr_system
 }
 
 bool OpenGLHandler::initResources(XrInstance xr_instance, XrSystemId xr_system_id){
-	// loadTexture("texture.png", &texture);
 	glGenTextures(1, &texture);
 	glGenVertexArrays(1, &vao);
 	glGenFramebuffers(1, &swapchainFramebuffer);
@@ -648,7 +659,7 @@ void OpenGLHandler::renderViewFromImage(const XrCompositionLayerProjectionView &
 
 
 
-typedef void (*CallbackRender)(int cViews, int * pViews);
+// typedef void renderCallback_t(int, XrView*, XrViewConfigurationView*);
 
 class OpenXrApplication{
 private:
@@ -674,12 +685,13 @@ private:
 	vector<int> framesHeight;
 	vector<void*> framesData;
 	void (*renderCallback)(int, XrView*, XrViewConfigurationView*);
+	function<void(int, vector<XrView>, vector<XrViewConfigurationView>)> renderCallbackFunction;
 
 	bool flagSessionRunning = false;
 
 	// config
-	XrEnvironmentBlendMode environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
-	XrViewConfigurationType configViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+	XrEnvironmentBlendMode environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_MAX_ENUM;
+	XrViewConfigurationType configViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_MAX_ENUM;
 
 	// actions
 	XrSpace spaceHead;
@@ -693,8 +705,8 @@ private:
 	OpenGLHandler xr_graphics_handler;
 #endif
 
-	bool defineLayers(vector<const char*> requestedApiLayers, vector<const char*> & enabledApiLayers);
-	bool defineExtensions(vector<const char*> requestedExtensions, vector<const char*> & enabledExtensions);
+	bool defineLayers(vector<string>, vector<string> &);
+	bool defineExtensions(vector<string>, vector<string> &);
 
 	bool getInstanceProperties();
 	bool getSystemProperties();
@@ -709,7 +721,7 @@ public:
 	OpenXrApplication();
 	~OpenXrApplication();
 
-	bool createInstance(const char *, const char *, vector<const char*>, vector<const char*>);
+	bool createInstance(string, string, vector<string>, vector<string>);
 	bool getSystem(XrFormFactor, XrEnvironmentBlendMode, XrViewConfigurationType); 
 	bool createActionSet();
 	bool createSession();
@@ -720,6 +732,14 @@ public:
 	bool renderViews(); 
 	bool setFrameByIndex(int, int, int, void *);
 	void setRenderCallback(void (*callback)(int, XrView*, XrViewConfigurationView*)){ renderCallback = callback; };
+	void setRenderCallbackFunction(function<void(int, vector<XrView>, vector<XrViewConfigurationView>)> &callback){ renderCallbackFunction = callback; };
+	void cleanFrames(){
+		// for(size_t i = 0; i < framesData.size(); i++){
+		// 	framesData[i] = nullptr;
+		// 	framesWidth[i] = 0;
+		// 	framesHeight[i] = 0;
+		// }
+	};
 
 	bool isSessionRunning(){ return flagSessionRunning; }
 	int getViewSize(){ return viewConfigurationViews.size(); }
@@ -727,19 +747,21 @@ public:
 
 OpenXrApplication::OpenXrApplication(){
 	renderCallback = nullptr;
+	renderCallbackFunction = nullptr;
 }
 
 OpenXrApplication::~OpenXrApplication(){
-	xrDestroySpace(xr_space_view);
-	xrDestroySpace(xr_space_local);
-	xrDestroySpace(xr_space_stage);
+	if(xr_instance != NULL){
+		xrDestroySpace(xr_space_view);
+		xrDestroySpace(xr_space_local);
+		xrDestroySpace(xr_space_stage);
 
-	xrDestroySession(xr_session);
- 	xrDestroyInstance(xr_instance);
+		xrDestroySession(xr_session);
+		xrDestroyInstance(xr_instance);
+	}
 }
 
-bool OpenXrApplication::defineLayers(vector<const char*> requestedApiLayers, vector<const char*> & enabledApiLayers){
-	// TODO: check if all required layers are availables
+bool OpenXrApplication::defineLayers(vector<string> requestedApiLayers, vector<string> & enabledApiLayers){
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateApiLayerProperties(0, &propertyCountOutput, nullptr);
 	if(!xrCheckResult(NULL, xr_result, "xrEnumerateApiLayerProperties"))
@@ -749,21 +771,37 @@ bool OpenXrApplication::defineLayers(vector<const char*> requestedApiLayers, vec
 	if(!xrCheckResult(NULL, xr_result, "xrEnumerateApiLayerProperties"))
 		return false;
 
-	std::cout << "OpenXR API layers available (" << apiLayerProperties.size() << ")" << std::endl;
-	for (size_t i = 0; i < apiLayerProperties.size(); i++){
+	std::cout << "OpenXR API layers (" << apiLayerProperties.size() << ")" << std::endl;
+	for(size_t i = 0; i < apiLayerProperties.size(); i++){
 		std::cout << "  |-- " << apiLayerProperties[i].layerName << std::endl;
-		for (size_t j = 0; j < requestedApiLayers.size(); j++)
-			if (strcmp(apiLayerProperties[i].layerName, requestedApiLayers[j]) == 0){
+		for(size_t j = 0; j < requestedApiLayers.size(); j++)
+			if(!requestedApiLayers[j].compare(apiLayerProperties[i].layerName)){
 				enabledApiLayers.push_back(requestedApiLayers[j]);
 				std::cout << "  |   (requested)" << std::endl;
 				break;
 			}
 	}
+
+	// check for unavailable layers
+	if(requestedApiLayers.size() != enabledApiLayers.size()){
+		bool used = false;
+		std::cout << "Unavailable OpenXR API layers" << std::endl;
+		for(size_t i = 0; i < requestedApiLayers.size(); i++){
+			used = false;
+			for(size_t j = 0; j < enabledApiLayers.size(); j++)
+				if(!requestedApiLayers[i].compare(enabledApiLayers[j])){
+					used = true;
+					break;
+				}
+			if(!used)
+				std::cout << "  |-- " << requestedApiLayers[i] << std::endl;
+		}
+		return false;
+	}
 	return true;
 }
 
-bool OpenXrApplication::defineExtensions(vector<const char*> requestedExtensions, vector<const char*> & enabledExtensions){
-	// TODO: check if all required extensions are availables 
+bool OpenXrApplication::defineExtensions(vector<string> requestedExtensions, vector<string> & enabledExtensions){
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateInstanceExtensionProperties(nullptr, 0, &propertyCountOutput, nullptr);
 	if(!xrCheckResult(NULL, xr_result, "xrEnumerateInstanceExtensionProperties"))
@@ -773,15 +811,32 @@ bool OpenXrApplication::defineExtensions(vector<const char*> requestedExtensions
 	if(!xrCheckResult(NULL, xr_result, "xrEnumerateInstanceExtensionProperties"))
 		return false;
 	
-	std::cout << "OpenXR extensions available (" << extensionProperties.size() << ")" << std::endl;
-	for (size_t i = 0; i < extensionProperties.size(); i++){
+	std::cout << "OpenXR extensions (" << extensionProperties.size() << ")" << std::endl;
+	for(size_t i = 0; i < extensionProperties.size(); i++){
 		std::cout << "  |-- " << extensionProperties[i].extensionName << std::endl;
-		for (size_t j = 0; j < requestedExtensions.size(); j++)
-			if (strcmp(extensionProperties[i].extensionName, requestedExtensions[j]) == 0){
+		for(size_t j = 0; j < requestedExtensions.size(); j++)
+			if(!requestedExtensions[j].compare(extensionProperties[i].extensionName)){
 				enabledExtensions.push_back(requestedExtensions[j]);
 				std::cout << "  |   (requested)" << std::endl;
 				break;
 			}
+	}
+
+	// check for unavailable extensions
+	if(requestedExtensions.size() != enabledExtensions.size()){
+		bool used = false;
+		std::cout << "Unavailable OpenXR extensions" << std::endl;
+		for(size_t i = 0; i < requestedExtensions.size(); i++){
+			used = false;
+			for(size_t j = 0; j < enabledExtensions.size(); j++)
+				if(!requestedExtensions[i].compare(enabledExtensions[j])){
+					used = true;
+					break;
+				}
+			if(!used)
+				std::cout << "  |-- " << requestedExtensions[i] << std::endl;
+		}
+		return false;
 	}
 	return true;
 }
@@ -817,7 +872,6 @@ bool OpenXrApplication::getSystemProperties(){
 }
 
 bool OpenXrApplication::getBlendModes(XrEnvironmentBlendMode blendMode){
-	// TODO: check if the environmentBlendMode is available
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateEnvironmentBlendModes(xr_instance, xr_system_id, configViewConfigurationType, 0, &propertyCountOutput, nullptr);
 	if(!xrCheckResult(NULL, xr_result, "xrEnumerateEnvironmentBlendModes"))
@@ -827,15 +881,22 @@ bool OpenXrApplication::getBlendModes(XrEnvironmentBlendMode blendMode){
 	if(!xrCheckResult(NULL, xr_result, "xrEnumerateEnvironmentBlendModes"))
 		return false;
 
-	environmentBlendMode = blendMode;
 	std::cout << "Environment blend modes (" << environmentBlendModes.size() << ")" << std::endl;
-	for (size_t i = 0; i < environmentBlendModes.size(); i++)
+	for (size_t i = 0; i < environmentBlendModes.size(); i++){
 		std::cout << "  |-- mode: " << environmentBlendModes[i] << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrEnvironmentBlendMode)" << std::endl;
+		if(environmentBlendModes[i] == blendMode){
+			std::cout << "  |   (requested)" << std::endl;
+			environmentBlendMode = blendMode;
+		}
+	}
+	if(environmentBlendMode == XR_ENVIRONMENT_BLEND_MODE_MAX_ENUM){
+		std::cout << "Unavailable blend mode: " << blendMode << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrEnvironmentBlendMode)" << std::endl;
+		return false;
+	}
 	return true;
 }
 
 bool OpenXrApplication::getViewConfiguration(XrViewConfigurationType configurationType){
-	// TODO: check if configurationType is available
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateViewConfigurations(xr_instance, xr_system_id, 0, &propertyCountOutput, nullptr);
 	if(!xrCheckResult(NULL, xr_result, "xrEnumerateViewConfigurations"))
@@ -846,11 +907,19 @@ bool OpenXrApplication::getViewConfiguration(XrViewConfigurationType configurati
 		return false;
 
 	std::cout << "View configurations (" << viewConfigurationTypes.size() << ")" << std::endl;
-	for (size_t i = 0; i < viewConfigurationTypes.size(); i++)
+	for(size_t i = 0; i < viewConfigurationTypes.size(); i++){
 		std::cout << "  |-- type " << viewConfigurationTypes[i] << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrViewConfigurationType)" << std::endl;
+		if(viewConfigurationTypes[i] == configurationType){
+			std::cout << "  |   (requested)" << std::endl;
+			configViewConfigurationType = configurationType;
+		}
+	}
+	if(configViewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_MAX_ENUM){
+		std::cout << "Unavailable view configuration type: " << configurationType << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrViewConfigurationType)" << std::endl;
+		return false;
+	}
 	
 	// view configuration properties
-	configViewConfigurationType = configurationType;
 	XrViewConfigurationProperties viewConfigurationProperties = {XR_TYPE_VIEW_CONFIGURATION_PROPERTIES};
 	xr_result = xrGetViewConfigurationProperties(xr_instance, xr_system_id, configViewConfigurationType, &viewConfigurationProperties);
 	if(!xrCheckResult(NULL, xr_result, "xrGetViewConfigurationProperties"))
@@ -870,7 +939,7 @@ bool OpenXrApplication::getViewConfiguration(XrViewConfigurationType configurati
 		return false;
 	
 	std::cout << "View configuration views (" << viewConfigurationViews.size() << ")" << std::endl;
-	for (size_t i = 0; i < viewConfigurationViews.size(); i++){
+	for(size_t i = 0; i < viewConfigurationViews.size(); i++){
 		std::cout << "  |-- view " << i << std::endl;
 		std::cout << "  |     |-- recommended resolution: " << viewConfigurationViews[i].recommendedImageRectWidth << " x " << viewConfigurationViews[i].recommendedImageRectHeight << std::endl;
 		std::cout << "  |     |-- max resolution: " << viewConfigurationViews[i].maxImageRectWidth << " x " << viewConfigurationViews[i].maxImageRectHeight << std::endl;
@@ -882,6 +951,7 @@ bool OpenXrApplication::getViewConfiguration(XrViewConfigurationType configurati
 	framesData.resize(viewConfigurationViews.size());
 	framesWidth.resize(viewConfigurationViews.size());
 	framesHeight.resize(viewConfigurationViews.size());
+	cleanFrames();
 
 	return true;
 }
@@ -976,6 +1046,7 @@ bool OpenXrApplication::defineSessionSpaces(){
 	xr_result = xrCreateActionSpace(xr_session, &actionSpaceInfo, &spaceHead);
 	if(!xrCheckResult(NULL, xr_result, "xrCreateActionSpace"))
 		return false;
+	return true;
 }
 
 bool OpenXrApplication::defineSwapchains(){
@@ -998,7 +1069,7 @@ bool OpenXrApplication::defineSwapchains(){
 #endif
 
 	int64_t selectedSwapchainFormats = -1;
-	for (size_t i = 0; i < swapchainFormats.size(); i++){
+	for(size_t i = 0; i < swapchainFormats.size(); i++){
 		for (size_t j = 0; j < _countof(supportedSwapchainFormats); j++)
 			if(swapchainFormats[i] == supportedSwapchainFormats[j]){
 				selectedSwapchainFormats = swapchainFormats[i];
@@ -1068,9 +1139,9 @@ bool OpenXrApplication::defineSwapchains(){
 }
 
 
-bool OpenXrApplication::createInstance(const char * applicationName, const char * engineName, vector<const char*> requestedApiLayers, vector<const char*> requestedExtensions){
-	vector<const char*> enabledApiLayers;
-	vector<const char*> enabledExtensions;
+bool OpenXrApplication::createInstance(string applicationName, string engineName, vector<string> requestedApiLayers, vector<string> requestedExtensions){
+	vector<string> enabledApiLayers;
+	vector<string> enabledExtensions;
 
 	// layers
 	if(!defineLayers(requestedApiLayers, enabledApiLayers))
@@ -1080,20 +1151,23 @@ bool OpenXrApplication::createInstance(const char * applicationName, const char 
 	if(!defineExtensions(requestedExtensions, enabledExtensions))
 		return false;
 
+	vector<const char*> enabledApiLayerNames = cast_to_vector_char_p(enabledApiLayers);
+	vector<const char*> enabledExtensionNames = cast_to_vector_char_p(enabledExtensions);
+
 	// initialize OpenXR (create instance) with the enabled extensions and layers
 	XrInstanceCreateInfo createInfo = {XR_TYPE_INSTANCE_CREATE_INFO};
 	createInfo.next = NULL;
 	createInfo.createFlags = 0;
 	createInfo.enabledApiLayerCount = enabledApiLayers.size();
-	createInfo.enabledApiLayerNames = enabledApiLayers.data();
+	createInfo.enabledApiLayerNames = enabledApiLayerNames.data();
 	createInfo.enabledExtensionCount = enabledExtensions.size();
-	createInfo.enabledExtensionNames = enabledExtensions.data();
+	createInfo.enabledExtensionNames = enabledExtensionNames.data();
 	createInfo.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
 	createInfo.applicationInfo.applicationVersion = 1;
 	createInfo.applicationInfo.engineVersion = 1;
 
-	strncpy(createInfo.applicationInfo.applicationName, applicationName, XR_MAX_APPLICATION_NAME_SIZE);
-	strncpy(createInfo.applicationInfo.engineName, engineName, XR_MAX_ENGINE_NAME_SIZE);
+	strncpy(createInfo.applicationInfo.applicationName, applicationName.c_str(), XR_MAX_APPLICATION_NAME_SIZE);
+	strncpy(createInfo.applicationInfo.engineName, engineName.c_str(), XR_MAX_ENGINE_NAME_SIZE);
 
 	xr_result = xrCreateInstance(&createInfo, &xr_instance);
 	if(!xrCheckResult(NULL, xr_result, "xrCreateInstance"))
@@ -1113,10 +1187,10 @@ bool OpenXrApplication::getSystem(XrFormFactor formFactor, XrEnvironmentBlendMod
 		return false;
 	if(!getSystemProperties())
 		return false;
- 	if(!getBlendModes(blendMode))
-	 	return false;
 	if(!getViewConfiguration(configurationType))
 		return false;
+ 	if(!getBlendModes(blendMode))
+	 	return false;
 	return true;
 }
 
@@ -1196,12 +1270,12 @@ bool OpenXrApplication::createSession(){
 	if(!xr_graphics_handler.getRequirements(xr_instance, xr_system_id))
 		return false;
 	if(!xr_graphics_handler.initGraphicsBinding(&xr_graphics_binding.xDisplay, 
-											&xr_graphics_binding.visualid,
-											&xr_graphics_binding.glxFBConfig, 
-											&xr_graphics_binding.glxDrawable,
-											&xr_graphics_binding.glxContext,
-											viewConfigurationViews[0].recommendedImageRectWidth,
-											viewConfigurationViews[0].recommendedImageRectHeight))
+												&xr_graphics_binding.visualid,
+												&xr_graphics_binding.glxFBConfig, 
+												&xr_graphics_binding.glxDrawable,
+												&xr_graphics_binding.glxContext,
+												viewConfigurationViews[0].recommendedImageRectWidth,
+												viewConfigurationViews[0].recommendedImageRectHeight))
 		return false;
 	if(!xr_graphics_handler.initResources(xr_instance, xr_system_id))
 		return false;
@@ -1251,7 +1325,7 @@ bool OpenXrApplication::pollEvents(bool * exitLoop){
 			return false;
 
 		// process messages
-		switch (event.type){
+		switch(event.type){
 			// session state changed
 			case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: {
 				const XrEventDataSessionStateChanged & sessionStateChangedEvent = *reinterpret_cast<XrEventDataSessionStateChanged*>(&event);
@@ -1262,7 +1336,7 @@ bool OpenXrApplication::pollEvents(bool * exitLoop){
 					return false;
 				}
 
-				switch (sessionStateChangedEvent.state){
+				switch(sessionStateChangedEvent.state){
 					case XR_SESSION_STATE_READY: {
 						XrSessionBeginInfo sessionBeginInfo = {XR_TYPE_SESSION_BEGIN_INFO};
 						sessionBeginInfo.primaryViewConfigurationType = configViewConfigurationType;
@@ -1391,6 +1465,8 @@ bool OpenXrApplication::renderViews(){
 		// call render callback to get frames
 		if(renderCallback)
 			renderCallback(views.size(), views.data(), viewConfigurationViews.data());
+		else if(renderCallbackFunction)
+			renderCallbackFunction(views.size(), views, viewConfigurationViews);
 
 		// render view to the appropriate part of the swapchain image
 		for (uint32_t i = 0; i < viewCountOutput; i++){
@@ -1420,11 +1496,12 @@ bool OpenXrApplication::renderViews(){
 			projectionLayerViews[i].subImage.imageRect.extent = {viewSwapchain.width, viewSwapchain.height};
 
 			// render frame
-			if(renderCallback){
+			if((renderCallback || renderCallbackFunction) && (framesWidth[i] && framesHeight[i])){
 				const XrSwapchainImageBaseHeader* const swapchainImage = (XrSwapchainImageBaseHeader*)&viewSwapchain.images[swapchainImageIndex];
 				// FIXME: use format (vulkan: 43, opengl: 34842)
 				// xr_graphics_handler.renderView(projectionLayerViews[i], swapchainImage, 43);
 				xr_graphics_handler.renderViewFromImage(projectionLayerViews[i], swapchainImage, 43, framesWidth[i], framesHeight[i], framesData[i]);
+				cleanFrames();
 			}
 
 			XrSwapchainImageReleaseInfo releaseInfo{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
@@ -1456,16 +1533,15 @@ bool OpenXrApplication::renderViews(){
 
 
 
-
-
+#ifdef APPLICATION
 int main(){
 	OpenXrApplication * app = new OpenXrApplication();
 
 	// create instance
-	char applicationName[] = {"Omniverse (VR)"};
-	char engineName[] = {"OpenXR Engine"};
-	vector<const char*> requestedApiLayers = { "XR_APILAYER_LUNARG_core_validation" };
-	vector<const char*> requestedExtensions = {
+	string applicationName = "Omniverse (VR)";
+	string engineName = "OpenXR Engine";
+	vector<string> requestedApiLayers = { "XR_APILAYER_LUNARG_core_validation" };
+	vector<string> requestedExtensions = {
 #ifdef XR_USE_GRAPHICS_API_VULKAN
 	#ifdef APP_USE_VULKAN2
 		XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME,
@@ -1511,17 +1587,19 @@ int main(){
 	}
 	return 0;
 }
+#endif
 
 
+#ifdef CTYPES
 extern "C"
 {
     OpenXrApplication * openXrApplication(){ return new OpenXrApplication(); }
     
 	bool createInstance(OpenXrApplication * app, const char * applicationName, const char * engineName, const char ** apiLayers, int apiLayersLength, const char ** extensions, int extensionsLength){
-		vector<const char*> requestedApiLayers;
+		vector<string> requestedApiLayers;
 		for(int i = 0; i < apiLayersLength; i++)
 			requestedApiLayers.push_back(apiLayers[i]);
-		vector<const char*> requestedExtensions;
+		vector<string> requestedExtensions;
 		for(int i = 0; i < extensionsLength; i++)
 			requestedExtensions.push_back(extensions[i]);
 		return app->createInstance(applicationName, engineName, requestedApiLayers, requestedExtensions); 
@@ -1550,3 +1628,4 @@ extern "C"
 
 	void setRenderCallback(OpenXrApplication * app, void (*callback)(int, XrView*, XrViewConfigurationView*)){ app->setRenderCallback(callback); }
 }
+#endif
