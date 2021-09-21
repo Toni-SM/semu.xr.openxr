@@ -708,14 +708,22 @@ private:
 	bool defineLayers(vector<string>, vector<string> &);
 	bool defineExtensions(vector<string>, vector<string> &);
 
-	bool getInstanceProperties();
-	bool getSystemProperties();
-	bool getBlendModes(XrEnvironmentBlendMode);
-	bool getViewConfiguration(XrViewConfigurationType);	
+	bool acquireInstanceProperties();
+	bool acquireSystemProperties();
+	bool acquireBlendModes(XrEnvironmentBlendMode);
+	bool acquireViewConfiguration(XrViewConfigurationType);	
 
 	bool defineReferenceSpaces();
 	bool defineSessionSpaces();
 	bool defineSwapchains();
+
+	void cleanFrames(){
+		// for(size_t i = 0; i < framesData.size(); i++){
+		// 	framesData[i] = nullptr;
+		// 	framesWidth[i] = 0;
+		// 	framesHeight[i] = 0;
+		// }
+	};
 
 public:
 	OpenXrApplication();
@@ -728,21 +736,15 @@ public:
 
 	bool pollEvents(bool *);
 	bool pollActions();
+	bool renderViews();
 
-	bool renderViews(); 
 	bool setFrameByIndex(int, int, int, void *);
-	void setRenderCallback(void (*callback)(int, XrView*, XrViewConfigurationView*)){ renderCallback = callback; };
-	void setRenderCallbackFunction(function<void(int, vector<XrView>, vector<XrViewConfigurationView>)> &callback){ renderCallbackFunction = callback; };
-	void cleanFrames(){
-		// for(size_t i = 0; i < framesData.size(); i++){
-		// 	framesData[i] = nullptr;
-		// 	framesWidth[i] = 0;
-		// 	framesHeight[i] = 0;
-		// }
-	};
+	void setRenderCallbackFromPointer(void (*callback)(int, XrView*, XrViewConfigurationView*)){ renderCallback = callback; };
+	void setRenderCallbackFromFunction(function<void(int, vector<XrView>, vector<XrViewConfigurationView>)> &callback){ renderCallbackFunction = callback; };
 
 	bool isSessionRunning(){ return flagSessionRunning; }
-	int getViewSize(){ return viewConfigurationViews.size(); }
+	int getViewConfigurationViewsSize(){ return 3; return viewConfigurationViews.size(); }
+	vector<XrViewConfigurationView> getViewConfigurationViews(){ viewConfigurationViews.resize(3); return viewConfigurationViews; }
 };
 
 OpenXrApplication::OpenXrApplication(){
@@ -841,7 +843,7 @@ bool OpenXrApplication::defineExtensions(vector<string> requestedExtensions, vec
 	return true;
 }
 
-bool OpenXrApplication::getInstanceProperties(){
+bool OpenXrApplication::acquireInstanceProperties(){
 	XrInstanceProperties instanceProperties = {XR_TYPE_INSTANCE_PROPERTIES};
 	xr_result = xrGetInstanceProperties(xr_instance, &instanceProperties);
 	if(!xrCheckResult(xr_instance, xr_result, "xrGetInstanceProperties"))
@@ -853,7 +855,7 @@ bool OpenXrApplication::getInstanceProperties(){
 	return true;
 }
 
-bool OpenXrApplication::getSystemProperties(){
+bool OpenXrApplication::acquireSystemProperties(){
 	XrSystemProperties systemProperties = {XR_TYPE_SYSTEM_PROPERTIES};
 	xr_result = xrGetSystemProperties(xr_instance, xr_system_id, &systemProperties);
 	if(!xrCheckResult(xr_instance, xr_result, "xrGetSystemProperties"))
@@ -871,7 +873,7 @@ bool OpenXrApplication::getSystemProperties(){
 	return true;
 }
 
-bool OpenXrApplication::getBlendModes(XrEnvironmentBlendMode blendMode){
+bool OpenXrApplication::acquireBlendModes(XrEnvironmentBlendMode blendMode){
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateEnvironmentBlendModes(xr_instance, xr_system_id, configViewConfigurationType, 0, &propertyCountOutput, nullptr);
 	if(!xrCheckResult(NULL, xr_result, "xrEnumerateEnvironmentBlendModes"))
@@ -896,7 +898,7 @@ bool OpenXrApplication::getBlendModes(XrEnvironmentBlendMode blendMode){
 	return true;
 }
 
-bool OpenXrApplication::getViewConfiguration(XrViewConfigurationType configurationType){
+bool OpenXrApplication::acquireViewConfiguration(XrViewConfigurationType configurationType){
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateViewConfigurations(xr_instance, xr_system_id, 0, &propertyCountOutput, nullptr);
 	if(!xrCheckResult(NULL, xr_result, "xrEnumerateViewConfigurations"))
@@ -1183,13 +1185,13 @@ bool OpenXrApplication::getSystem(XrFormFactor formFactor, XrEnvironmentBlendMod
 	if(!xrCheckResult(xr_instance, xr_result, "xrGetSystem"))
 		return false;
 	
-	if(!getInstanceProperties())
+	if(!acquireInstanceProperties())
 		return false;
-	if(!getSystemProperties())
+	if(!acquireSystemProperties())
 		return false;
-	if(!getViewConfiguration(configurationType))
+	if(!acquireViewConfiguration(configurationType))
 		return false;
- 	if(!getBlendModes(blendMode))
+ 	if(!acquireBlendModes(blendMode))
 	 	return false;
 	return true;
 }
@@ -1406,15 +1408,6 @@ bool OpenXrApplication::pollActions(){
 	return true;
 }
 
-bool OpenXrApplication::setFrameByIndex(int index, int width, int height, void * frame){
-	if(index < 0 || index >= framesData.size())
-		return false;
-	framesWidth[index] = width;
-	framesHeight[index] = height;
-	framesData[index] = frame;
-	return true;
-}
-
 bool OpenXrApplication::renderViews(){
 	xr_graphics_handler.acquireContext(xr_graphics_binding, "xrWaitFrame");
 
@@ -1531,6 +1524,14 @@ bool OpenXrApplication::renderViews(){
 	return true;
 }
 
+bool OpenXrApplication::setFrameByIndex(int index, int width, int height, void * frame){
+	if(index < 0 || (size_t)index >= framesData.size())
+		return false;
+	framesWidth[index] = width;
+	framesHeight[index] = height;
+	framesData[index] = frame;
+	return true;
+}
 
 
 #ifdef APPLICATION
@@ -1617,15 +1618,26 @@ extern "C"
     bool renderViews(OpenXrApplication * app){ return app->renderViews(); }
 
 	bool setFrames(OpenXrApplication * app, int leftWidth, int leftHeight, void * leftData, int rightWidth, int rightHeight, void * rightData){
-		if(app->getViewSize() == 1)
+		if(app->getViewConfigurationViewsSize() == 1)
 			return app->setFrameByIndex(0, leftWidth, leftHeight, leftData);
-		else if(app->getViewSize() == 2){
+		else if(app->getViewConfigurationViewsSize() == 2){
 			bool status = app->setFrameByIndex(0, leftWidth, leftHeight, leftData);
 			return status && app->setFrameByIndex(1, rightWidth, rightHeight, rightData);
 		}
 		return false;
 	}
 
-	void setRenderCallback(OpenXrApplication * app, void (*callback)(int, XrView*, XrViewConfigurationView*)){ app->setRenderCallback(callback); }
+	void setRenderCallback(OpenXrApplication * app, void (*callback)(int, XrView*, XrViewConfigurationView*)){ app->setRenderCallbackFromPointer(callback); }
+
+	int getViewConfigurationViewsSize(OpenXrApplication * app){ return app->getViewConfigurationViewsSize(); }
+	bool getViewConfigurationViews(OpenXrApplication * app, XrViewConfigurationView * views, int viewsLength){
+		if((size_t)viewsLength != app->getViewConfigurationViewsSize())
+			return false;
+		vector<XrViewConfigurationView> viewConfigurationView = app->getViewConfigurationViews();
+		for(size_t i = 0; i < viewConfigurationView.size(); i++)
+			views[i] = viewConfigurationView[i];
+		return true;
+	}
+
 }
 #endif

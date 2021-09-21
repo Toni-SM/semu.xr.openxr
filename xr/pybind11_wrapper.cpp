@@ -75,22 +75,27 @@ namespace pybind11 { namespace detail {
 PYBIND11_MODULE(xrlib_p, m){
     py::class_<OpenXrApplication>(m, "OpenXrApplication")
         .def(py::init<>())
+        // utils
         .def("isSessionRunning", &OpenXrApplication::isSessionRunning)
+        .def("getViewConfigurationViews", &OpenXrApplication::getViewConfigurationViews)
+        // setup OpenXr app
         .def("createInstance", &OpenXrApplication::createInstance)
         .def("getSystem", [](OpenXrApplication &m, int formFactor, int blendMode, int configurationType){
                 return m.getSystem(XrFormFactor(formFactor), XrEnvironmentBlendMode(blendMode), XrViewConfigurationType(configurationType));
             })
         .def("createActionSet", &OpenXrApplication::createActionSet)
         .def("createSession", &OpenXrApplication::createSession)
+        // poll data
         .def("pollEvents", [](OpenXrApplication &m){
                 bool exitLoop = true;
                 bool returnValue = m.pollEvents(&exitLoop); 
                 return std::make_tuple(returnValue, exitLoop); 
             })
         .def("pollActions", &OpenXrApplication::pollActions)
+        // render
         .def("renderViews", &OpenXrApplication::renderViews)
         // render utilities
-        .def("setRenderCallbackFunction", &OpenXrApplication::setRenderCallbackFunction)
+        .def("setRenderCallback", &OpenXrApplication::setRenderCallbackFromFunction)
         .def("setFrames", [](OpenXrApplication &m, py::array_t<uint8_t> left, py::array_t<uint8_t> right){
                 py::buffer_info leftInfo = left.request();
                 if(m.getViewSize() == 1)
