@@ -743,8 +743,8 @@ public:
 	void setRenderCallbackFromFunction(function<void(int, vector<XrView>, vector<XrViewConfigurationView>)> &callback){ renderCallbackFunction = callback; };
 
 	bool isSessionRunning(){ return flagSessionRunning; }
-	int getViewConfigurationViewsSize(){ return 3; return viewConfigurationViews.size(); }
-	vector<XrViewConfigurationView> getViewConfigurationViews(){ viewConfigurationViews.resize(3); return viewConfigurationViews; }
+	int getViewConfigurationViewsSize(){ return viewConfigurationViews.size(); }
+	vector<XrViewConfigurationView> getViewConfigurationViews(){ return viewConfigurationViews; }
 };
 
 OpenXrApplication::OpenXrApplication(){
