@@ -1,6 +1,8 @@
 import os
 import sys
 import ctypes
+
+import cv2
 import numpy as np
 
 
@@ -127,7 +129,8 @@ class OpenXR:
                               engine_name: str = "OpenXR Engine", 
                               api_layers: list = [], 
                               extensions: list = []) -> bool:
-        extensions.append(self._graphics)
+        if self._graphics not in extensions:
+            extensions += [self._graphics]
         
         if self._use_ctypes:
             # format API layes
@@ -139,12 +142,12 @@ class OpenXR:
             requested_extensions[:] = [extension.encode('utf-8') for extension in extensions]
 
             return bool(self._lib.createInstance(self._app, 
-                                                ctypes.create_string_buffer(application_name.encode('utf-8')),
-                                                ctypes.create_string_buffer(engine_name.encode('utf-8')),
-                                                requested_api_layers,
-                                                len(api_layers),
-                                                requested_extensions,
-                                                len(extensions)))
+                                                 ctypes.create_string_buffer(application_name.encode('utf-8')),
+                                                 ctypes.create_string_buffer(engine_name.encode('utf-8')),
+                                                 requested_api_layers,
+                                                 len(api_layers),
+                                                 requested_extensions,
+                                                 len(extensions)))
         else:
             return self._app.createInstance(application_name, engine_name, api_layers, extensions)
 
@@ -200,6 +203,18 @@ class OpenXR:
         else:
             return self._app.renderViews()
 
+    def get_recommended_resolutions(self) -> list:
+        # View index 0 must represent the left eye and view index 1 must represent the right eye.
+        if self._use_ctypes:
+            num_views = self._lib.getViewConfigurationViewsSize(self._app)
+            views = (XrViewConfigurationView * num_views)()
+            if self._lib.getViewConfigurationViews(self._app, views, 3):
+                return [(view.recommendedImageRectWidth, view.recommendedImageRectHeight) for view in views]
+            else:
+                return []
+        else:
+            return [(view["recommendedImageRectWidth"], view["recommendedImageRectHeight"]) for view in self._app.getViewConfigurationViews()]
+
     def subscribe_render_event(self, callback=None):
         def _internal_callback(num_views, views, configuration_views):
             pass
@@ -211,44 +226,58 @@ class OpenXR:
             self._lib.setRenderCallback(self._app, self._callback_render_event)
         else:
             self._callback_render_event = callback
-            self._app.setRenderCallbackFunction(self._callback_render_event)
+            self._app.setRenderCallback(self._callback_render_event)
 
-    def set_frames(self, configuration_views: list, left: np.ndarray, right: np.ndarray = None) -> bool:
+    def set_frames(self, configuration_views: list, left: np.ndarray, right: np.ndarray = None, transform: bool = True) -> bool:
         if self._use_ctypes:
-            self._frame_left = self._crop(configuration_views[0], left)
+            self._frame_left = self._crop(configuration_views[0], left, transform)
             if right is None:
                 return bool(self._lib.setFrames(self._app, 
                                                 self._frame_left.shape[1], self._frame_left.shape[0], self._frame_left.ctypes.data_as(ctypes.c_void_p),
                                                 0, 0, None))
             else:
-                self._frame_right = self._crop(configuration_views[1], right)
+                self._frame_right = self._crop(configuration_views[1], right, transform)
                 return bool(self._lib.setFrames(self._app, 
                                                 self._frame_left.shape[1], self._frame_left.shape[0], self._frame_left.ctypes.data_as(ctypes.c_void_p),
                                                 self._frame_right.shape[1], self._frame_right.shape[0], self._frame_right.ctypes.data_as(ctypes.c_void_p)))
         else:
-            self._frame_left = self._crop(configuration_views[0], left)
+            self._frame_left = self._crop(configuration_views[0], left, transform)
             if right is None:
                 return self._app.setFrames(self._frame_left, np.array(None))
             else:
-                self._frame_right = self._crop(configuration_views[1], right)
+                self._frame_right = self._crop(configuration_views[1], right, transform)
                 return self._app.setFrames(self._frame_left, self._frame_right)
 
-    def _crop(self, configuration_view: XrViewConfigurationView, frame: np.ndarray) -> np.ndarray:
-        current_ratio = frame.shape[1] / frame.shape[0]
-        if self._use_ctypes:
-            recommended_ratio = configuration_view.recommendedImageRectWidth / configuration_view.recommendedImageRectHeight
-            recommended_size = (configuration_view.recommendedImageRectWidth, configuration_view.recommendedImageRectHeight)
-        else:
-            recommended_ratio = configuration_view["recommendedImageRectWidth"] / configuration_view["recommendedImageRectHeight"]
-            recommended_size = (configuration_view["recommendedImageRectWidth"], configuration_view["recommendedImageRectHeight"])
-        if abs(current_ratio - recommended_ratio) > 0.05:
-            if current_ratio > recommended_ratio:
-                m = int(abs(recommended_ratio * frame.shape[0] - frame.shape[1]) / 2)
-                return cv2.resize(frame[:, m:-m], recommended_size)
+    def _crop(self, configuration_view: XrViewConfigurationView, frame: np.ndarray, transform: bool = True, rotate: int = 1) -> np.ndarray:
+        # NO ROTATE = -1,
+        # cv::ROTATE_90_CLOCKWISE = 0,
+        # cv::ROTATE_180 = 1,
+        # cv::ROTATE_90_COUNTERCLOCKWISE = 2 
+        if transform:
+            current_ratio = frame.shape[1] / frame.shape[0]
+            if self._use_ctypes:
+                recommended_ratio = configuration_view.recommendedImageRectWidth / configuration_view.recommendedImageRectHeight
+                recommended_size = (configuration_view.recommendedImageRectWidth, configuration_view.recommendedImageRectHeight)
             else:
-                m = int(abs(frame.shape[1] / recommended_ratio - frame.shape[0]) / 2)
-                return cv2.resize(frame[m:-m], recommended_size)
-        return frame
+                recommended_ratio = configuration_view["recommendedImageRectWidth"] / configuration_view["recommendedImageRectHeight"]
+                recommended_size = (configuration_view["recommendedImageRectWidth"], configuration_view["recommendedImageRectHeight"])
+            if abs(current_ratio - recommended_ratio) > 0.05:
+                if current_ratio > recommended_ratio:
+                    m = int(abs(recommended_ratio * frame.shape[0] - frame.shape[1]) / 2)
+                    if rotate != -1:
+                        return cv2.rotate(cv2.resize(frame[:, m:-m, :3], recommended_size, interpolation=cv2.INTER_LINEAR), rotate)
+                    else:
+                        return cv2.resize(frame[:, m:-m, :3], recommended_size, interpolation=cv2.INTER_LINEAR)
+                else:
+                    m = int(abs(frame.shape[1] / recommended_ratio - frame.shape[0]) / 2)
+                    if rotate != -1:
+                        return cv2.rotate(cv2.resize(frame[m:-m, :, :3], recommended_size, interpolation=cv2.INTER_LINEAR), rotate)
+                    else:
+                        return cv2.resize(frame[m:-m, :, :3], recommended_size, interpolation=cv2.INTER_LINEAR)
+        if rotate != -1:
+            return cv2.rotate(frame if frame.ndim == 3 else np.copy(frame[:, :, :3]), rotate)
+        return frame if frame.ndim == 3 else np.copy(frame[:, :, :3])
+
 
 
 if __name__ == "__main__":
