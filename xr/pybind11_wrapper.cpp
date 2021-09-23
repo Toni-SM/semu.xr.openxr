@@ -96,14 +96,14 @@ PYBIND11_MODULE(xrlib_p, m){
         .def("renderViews", &OpenXrApplication::renderViews)
         // render utilities
         .def("setRenderCallback", &OpenXrApplication::setRenderCallbackFromFunction)
-        .def("setFrames", [](OpenXrApplication &m, py::array_t<uint8_t> left, py::array_t<uint8_t> right){
+        .def("setFrames", [](OpenXrApplication &m, py::array_t<uint8_t> left, py::array_t<uint8_t> right, bool rgba){
                 py::buffer_info leftInfo = left.request();
-                if(m.getViewSize() == 1)
-                    return m.setFrameByIndex(0, leftInfo.shape[1], leftInfo.shape[0], leftInfo.ptr);
-                else if(m.getViewSize() == 2){
+                if(m.getViewConfigurationViewsSize() == 1)
+                    return m.setFrameByIndex(0, leftInfo.shape[1], leftInfo.shape[0], leftInfo.ptr, rgba);
+                else if(m.getViewConfigurationViewsSize() == 2){
                     py::buffer_info rightInfo = right.request();
-                    bool status = m.setFrameByIndex(0, leftInfo.shape[1], leftInfo.shape[0], leftInfo.ptr);
-                    return status && m.setFrameByIndex(1, rightInfo.shape[1], rightInfo.shape[0], rightInfo.ptr);
+                    bool status = m.setFrameByIndex(0, leftInfo.shape[1], leftInfo.shape[0], leftInfo.ptr, rgba);
+                    return status && m.setFrameByIndex(1, rightInfo.shape[1], rightInfo.shape[0], rightInfo.ptr, rgba);
                 }
                 return false;
             });
