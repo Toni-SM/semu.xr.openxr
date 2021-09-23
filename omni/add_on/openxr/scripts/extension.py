@@ -1,6 +1,10 @@
 import gc
 import omni.ext
 try:
+    import cv2
+except:
+    omni.kit.pipapi.install("opencv-python")
+try:
     from .. import _openxr as _openxr
 except:
     print(">>>> [DEVELOPMENT] import openxr")
