@@ -415,7 +415,7 @@ public:
 
 	void acquireContext(XrGraphicsBindingOpenGLXlibKHR, string);
 	void renderView(const XrCompositionLayerProjectionView &, const XrSwapchainImageBaseHeader *, int64_t);
-	void renderViewFromImage(const XrCompositionLayerProjectionView &, const XrSwapchainImageBaseHeader *, int64_t, int, int, void *);
+	void renderViewFromImage(const XrCompositionLayerProjectionView &, const XrSwapchainImageBaseHeader *, int64_t, int, int, void *, bool);
 
 	uint32_t getSupportedSwapchainSampleCount(XrViewConfigurationView){ return 1; }
 };
@@ -604,16 +604,16 @@ void OpenGLHandler::renderView(const XrCompositionLayerProjectionView & layerVie
 		glUseProgram(0);
 }
 
-void OpenGLHandler::renderViewFromImage(const XrCompositionLayerProjectionView & layerView, const XrSwapchainImageBaseHeader * swapchainImage, int64_t swapchainFormat, int frameWidth, int frameHeight, void * frameData){
+void OpenGLHandler::renderViewFromImage(const XrCompositionLayerProjectionView & layerView, const XrSwapchainImageBaseHeader * swapchainImage, int64_t swapchainFormat, int frameWidth, int frameHeight, void * frameData, bool rgba){
 		// load texture
 		glBindTexture(GL_TEXTURE_2D, texture);
 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, frameWidth, frameHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, frameData);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, frameWidth, frameHeight, 0, rgba ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, frameData);
 
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
 		// render to hmd
         glBindFramebuffer(GL_FRAMEBUFFER, swapchainFramebuffer);
@@ -681,6 +681,7 @@ private:
 	vector<XrViewConfigurationView> viewConfigurationViews;
 	vector<SwapchainHandler> swapchainsHandlers;
 
+	bool framesRGBA;
 	vector<int> framesWidth;
 	vector<int> framesHeight;
 	vector<void*> framesData;
@@ -738,7 +739,7 @@ public:
 	bool pollActions();
 	bool renderViews();
 
-	bool setFrameByIndex(int, int, int, void *);
+	bool setFrameByIndex(int, int, int, void *, bool);
 	void setRenderCallbackFromPointer(void (*callback)(int, XrView*, XrViewConfigurationView*)){ renderCallback = callback; };
 	void setRenderCallbackFromFunction(function<void(int, vector<XrView>, vector<XrViewConfigurationView>)> &callback){ renderCallbackFunction = callback; };
 
@@ -1493,7 +1494,7 @@ bool OpenXrApplication::renderViews(){
 				const XrSwapchainImageBaseHeader* const swapchainImage = (XrSwapchainImageBaseHeader*)&viewSwapchain.images[swapchainImageIndex];
 				// FIXME: use format (vulkan: 43, opengl: 34842)
 				// xr_graphics_handler.renderView(projectionLayerViews[i], swapchainImage, 43);
-				xr_graphics_handler.renderViewFromImage(projectionLayerViews[i], swapchainImage, 43, framesWidth[i], framesHeight[i], framesData[i]);
+				xr_graphics_handler.renderViewFromImage(projectionLayerViews[i], swapchainImage, 43, framesWidth[i], framesHeight[i], framesData[i], framesRGBA);
 				cleanFrames();
 			}
 
@@ -1524,12 +1525,13 @@ bool OpenXrApplication::renderViews(){
 	return true;
 }
 
-bool OpenXrApplication::setFrameByIndex(int index, int width, int height, void * frame){
+bool OpenXrApplication::setFrameByIndex(int index, int width, int height, void * frame, bool rgba){
 	if(index < 0 || (size_t)index >= framesData.size())
 		return false;
 	framesWidth[index] = width;
 	framesHeight[index] = height;
 	framesData[index] = frame;
+	framesRGBA = rgba;
 	return true;
 }
 
@@ -1617,12 +1619,12 @@ extern "C"
     bool pollActions(OpenXrApplication * app){ return app->pollActions(); }
     bool renderViews(OpenXrApplication * app){ return app->renderViews(); }
 
-	bool setFrames(OpenXrApplication * app, int leftWidth, int leftHeight, void * leftData, int rightWidth, int rightHeight, void * rightData){
+	bool setFrames(OpenXrApplication * app, int leftWidth, int leftHeight, void * leftData, int rightWidth, int rightHeight, void * rightData, bool rgba){
 		if(app->getViewConfigurationViewsSize() == 1)
-			return app->setFrameByIndex(0, leftWidth, leftHeight, leftData);
+			return app->setFrameByIndex(0, leftWidth, leftHeight, leftData, rgba);
 		else if(app->getViewConfigurationViewsSize() == 2){
-			bool status = app->setFrameByIndex(0, leftWidth, leftHeight, leftData);
-			return status && app->setFrameByIndex(1, rightWidth, rightHeight, rightData);
+			bool status = app->setFrameByIndex(0, leftWidth, leftHeight, leftData, rgba);
+			return status && app->setFrameByIndex(1, rightWidth, rightHeight, rightData, rgba);
 		}
 		return false;
 	}
