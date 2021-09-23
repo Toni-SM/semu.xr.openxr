@@ -1,9 +1,16 @@
+from typing import Union
+
 import os
 import sys
 import ctypes
 
 import cv2
 import numpy as np
+
+import pxr
+import omni
+from pxr import UsdGeom, Gf, Usd
+from omni.syntheticdata import sensors
 
 
 def acquire_openxr_interface(use_ctypes: bool = False, graphics: str = "OpenGL"):
@@ -45,9 +52,23 @@ class OpenXR:
 
         self._use_ctypes = use_ctypes
         
+        # views
+        self._prim_left = None
+        self._prim_right = None
         self._frame_left = None
         self._frame_right = None
-        self._callback_render_views = None
+        self._viewport_window_left = None
+        self._viewport_window_right = None
+        self._rectification_quat_left = Gf.Quatd(1, 0, 0, 0)
+        self._rectification_quat_right = Gf.Quatd(1, 0, 0, 0)
+
+        self._viewport_interface = omni.kit.viewport.get_viewport_interface()
+
+        self._transform_fit = None
+        self._transform_flip = None
+
+        # callbacks
+        self._callback_render_event = None
 
         # constants
         self.XR_KHR_OPENGL_ENABLE_EXTENSION_NAME = "XR_KHR_opengl_enable"
@@ -198,62 +219,191 @@ class OpenXR:
             return self._app.pollActions()
 
     def render_views(self) -> bool:
+        if self._callback_render_event is None:
+            print("[WARNING] No callback has been established for rendering events. Internal callback will be used")
+            self.subscribe_render_event()
         if self._use_ctypes:
             return bool(self._lib.renderViews(self._app))
         else:
             return self._app.renderViews()
 
+    # view utilities
+
+    def setup_mono_view(self, camera: Union[str, pxr.Usd.Prim, pxr.Sdf.Path] = "/OpenXR/Cameras/camera") -> None:
+        self.setup_stereo_view(camera, None)
+
+    def setup_stereo_view(self, left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Usd.Prim, pxr.Sdf.Path, None] = "/OpenXR/Cameras/right_camera") -> None:
+        def get_or_create_vieport_window(camera, teleport=True, window_size=(400, 300), resolution=(1280, 720)):
+            window = None
+            camera = str(camera.GetPath() if type(camera) is Usd.Prim else camera)
+            # get viewport window
+            for interface in self._viewport_interface.get_instance_list():
+                w = self._viewport_interface.get_viewport_window(interface)
+                if camera == w.get_active_camera():
+                    window = w
+                    # check visibility
+                    if not w.is_visible():
+                        w.set_visible(True)
+                    break
+            # create viewport window if not exist
+            if window is None:
+                window = self._viewport_interface.get_viewport_window(self._viewport_interface.create_instance())
+                window.set_window_size(*window_size)
+                window.set_active_camera(camera)
+                window.set_texture_resolution(*resolution)
+                if teleport:
+                    window.set_camera_position(camera, 1.0, 1.0, 1.0, True)
+                    window.set_camera_target(camera, 0.0, 0.0, 0.0, True)
+            return window
+        
+        stage = omni.usd.get_context().get_stage()
+
+        # left camera
+        teleport_camera = False
+        self._prim_left = None
+        if type(left_camera) is Usd.Prim:
+            self._prim_left = left_camera
+        elif stage.GetPrimAtPath(left_camera).IsValid():
+            self._prim_left = stage.GetPrimAtPath(left_camera)
+        else:
+            teleport_camera = True
+            self._prim_left = stage.DefinePrim(omni.usd.get_stage_next_free_path(stage, left_camera, False), "Camera")
+        self._viewport_window_left = get_or_create_vieport_window(self._prim_left, teleport=teleport_camera)
+
+        # right camera
+        teleport_camera = False
+        self._prim_right = None
+        if right_camera is not None:
+            if type(right_camera) is Usd.Prim:
+                self._prim_right = right_camera
+            elif stage.GetPrimAtPath(right_camera).IsValid():
+                self._prim_right = stage.GetPrimAtPath(right_camera)
+            else:
+                teleport_camera = True
+                self._prim_right = stage.DefinePrim(omni.usd.get_stage_next_free_path(stage, right_camera, False), "Camera")
+            self._viewport_window_right = get_or_create_vieport_window(self._prim_right, teleport=teleport_camera)
+
+        # set recommended resolution
+        resolutions = self.get_recommended_resolutions()
+        if len(resolutions) and self._viewport_window_left is not None:
+            self._viewport_window_left.set_texture_resolution(*resolutions[0])
+        if len(resolutions) == 2 and self._viewport_window_right is not None:
+            self._viewport_window_right.set_texture_resolution(*resolutions[1])
+
     def get_recommended_resolutions(self) -> list:
-        # View index 0 must represent the left eye and view index 1 must represent the right eye.
+        # View index 0 must represent the left eye and view index 1 must represent the right eye
         if self._use_ctypes:
             num_views = self._lib.getViewConfigurationViewsSize(self._app)
             views = (XrViewConfigurationView * num_views)()
-            if self._lib.getViewConfigurationViews(self._app, views, 3):
+            if self._lib.getViewConfigurationViews(self._app, views, num_views):
                 return [(view.recommendedImageRectWidth, view.recommendedImageRectHeight) for view in views]
             else:
                 return []
         else:
             return [(view["recommendedImageRectWidth"], view["recommendedImageRectHeight"]) for view in self._app.getViewConfigurationViews()]
 
+    def set_stereo_rectification(self, x: float = 0, y: float = 0, z: float = 0) -> None:
+        self._rectification_quat_left = pxr.Gf.Quatd(1, 0, 0, 0)
+        self._rectification_quat_right = pxr.Gf.Quatd(1, 0, 0, 0)
+        if x:   # w,x,y,z = cos(a/2), sin(a/2), 0, 0
+            self._rectification_quat_left *= pxr.Gf.Quatd(np.cos(x/2), np.sin(x/2), 0, 0)
+            self._rectification_quat_right *= pxr.Gf.Quatd(np.cos(-x/2), np.sin(-x/2), 0, 0)
+        if y:   # w,x,y,z = cos(a/2), 0, sin(a/2), 0
+            self._rectification_quat_left *= pxr.Gf.Quatd(np.cos(y/2), 0, np.sin(y/2), 0)
+            self._rectification_quat_right *= pxr.Gf.Quatd(np.cos(-y/2), 0, np.sin(-y/2), 0)
+        if z:   # w,x,y,z = cos(a/2), 0, 0, sin(a/2)
+            self._rectification_quat_left *= pxr.Gf.Quatd(np.cos(z/2), 0, 0, np.sin(z/2))
+            self._rectification_quat_right *= pxr.Gf.Quatd(np.cos(-z/2), 0, 0, np.sin(-z/2))
+
+    def set_frame_transformations(self, fit: bool = True, flip: Union[int, tuple, None] = None) -> None:
+        self._transform_fit = fit
+        self._transform_flip = flip
+
+    def teleport_camera(self, prim, position: pxr.Gf.Vec3d, rotation: pxr.Gf.Quatd) -> None:
+        properties = prim.GetPropertyNames()
+        if "xformOp:transform" in properties:
+            prim.GetAttribute("xformOp:transform").Set(Gf.Matrix4d(Gf.Rotation(rotation), position))
+        else:
+            xform = UsdGeom.Xformable(prim)
+            xform_op = xform.AddXformOp(UsdGeom.XformOp.TypeTransform, UsdGeom.XformOp.PrecisionDouble, "")
+            xform_op.Set(Gf.Matrix4d(Gf.Rotation(rotation), position))
+
     def subscribe_render_event(self, callback=None):
         def _internal_callback(num_views, views, configuration_views):
-            pass
+            # teleport left camera
+            if self._use_ctypes:
+                position = views[0].pose.position
+                rotation = views[0].pose.orientation
+                position = Gf.Vec3d(position.x, position.y, position.z)
+                rotation = Gf.Quatd(rotation.w, rotation.x, rotation.y, rotation.z)
+            else:
+                position = views[0]["pose"]["position"]
+                rotation = views[0]["pose"]["orientation"]
+                position = Gf.Vec3d(position["x"], position["y"], position["z"])
+                rotation = Gf.Quatd(rotation["w"], rotation["x"], rotation["y"], rotation["z"])
+            self.teleport_camera(self._prim_left, position, self._rectification_quat_left * rotation)
+
+            # teleport right camera
+            if num_views == 2:
+                if self._use_ctypes:
+                    position = views[1].pose.position
+                    rotation = views[1].pose.orientation
+                    position = Gf.Vec3d(position.x, position.y, position.z)
+                    rotation = Gf.Quatd(rotation.w, rotation.x, rotation.y, rotation.z)
+                else:
+                    position = views[1]["pose"]["position"]
+                    rotation = views[1]["pose"]["orientation"]
+                    position = Gf.Vec3d(position["x"], position["y"], position["z"])
+                    rotation = Gf.Quatd(rotation["w"], rotation["x"], rotation["y"], rotation["z"])
+                self.teleport_camera(self._prim_right, position, self._rectification_quat_right * rotation)
+            
+            # set frames
+            try:
+                frame_left = sensors.get_rgb(self._viewport_window_left)
+                frame_right = sensors.get_rgb(self._viewport_window_right) if num_views == 2 else None
+                self.set_frames(configuration_views, frame_left, frame_right)
+            except Exception as e:
+                print("[ERROR]", str(e))
         
+        if callback is None:
+            callback = _internal_callback
         if self._use_ctypes:
-            if callback is None:
-                callback = _internal_callback
             self._callback_render_event = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.POINTER(XrView), ctypes.POINTER(XrViewConfigurationView))(callback)
             self._lib.setRenderCallback(self._app, self._callback_render_event)
         else:
             self._callback_render_event = callback
             self._app.setRenderCallback(self._callback_render_event)
 
-    def set_frames(self, configuration_views: list, left: np.ndarray, right: np.ndarray = None, transform: bool = True) -> bool:
+    def set_frames(self, configuration_views: list, left: np.ndarray, right: np.ndarray = None) -> bool:
+        use_rgba = True if left.shape[2] == 4 else False
         if self._use_ctypes:
-            self._frame_left = self._crop(configuration_views[0], left, transform)
+            self._frame_left = self._transform(configuration_views[0], left)
             if right is None:
                 return bool(self._lib.setFrames(self._app, 
                                                 self._frame_left.shape[1], self._frame_left.shape[0], self._frame_left.ctypes.data_as(ctypes.c_void_p),
-                                                0, 0, None))
+                                                0, 0, None, 
+                                                use_rgba))
             else:
-                self._frame_right = self._crop(configuration_views[1], right, transform)
+                self._frame_right = self._transform(configuration_views[1], right)
                 return bool(self._lib.setFrames(self._app, 
                                                 self._frame_left.shape[1], self._frame_left.shape[0], self._frame_left.ctypes.data_as(ctypes.c_void_p),
-                                                self._frame_right.shape[1], self._frame_right.shape[0], self._frame_right.ctypes.data_as(ctypes.c_void_p)))
+                                                self._frame_right.shape[1], self._frame_right.shape[0], self._frame_right.ctypes.data_as(ctypes.c_void_p),
+                                                use_rgba))
         else:
-            self._frame_left = self._crop(configuration_views[0], left, transform)
+            self._frame_left = self._transform(configuration_views[0], left)
             if right is None:
-                return self._app.setFrames(self._frame_left, np.array(None))
+                return self._app.setFrames(self._frame_left, np.array(None), use_rgba)
             else:
-                self._frame_right = self._crop(configuration_views[1], right, transform)
-                return self._app.setFrames(self._frame_left, self._frame_right)
+                self._frame_right = self._transform(configuration_views[1], right)
+                return self._app.setFrames(self._frame_left, self._frame_right, use_rgba)
 
-    def _crop(self, configuration_view: XrViewConfigurationView, frame: np.ndarray, transform: bool = True, rotate: int = 1) -> np.ndarray:
-        # NO ROTATE = -1,
-        # cv::ROTATE_90_CLOCKWISE = 0,
-        # cv::ROTATE_180 = 1,
-        # cv::ROTATE_90_COUNTERCLOCKWISE = 2 
-        if transform:
+    def _transform(self, configuration_view: XrViewConfigurationView, frame: np.ndarray) -> np.ndarray:
+        transformed = False
+        if self._transform_flip is not None:
+            transformed = True
+            frame = np.flip(frame, axis=self._transform_flip)
+        if self._transform_fit:
+            transformed = True
             current_ratio = frame.shape[1] / frame.shape[0]
             if self._use_ctypes:
                 recommended_ratio = configuration_view.recommendedImageRectWidth / configuration_view.recommendedImageRectHeight
@@ -261,22 +411,14 @@ class OpenXR:
             else:
                 recommended_ratio = configuration_view["recommendedImageRectWidth"] / configuration_view["recommendedImageRectHeight"]
                 recommended_size = (configuration_view["recommendedImageRectWidth"], configuration_view["recommendedImageRectHeight"])
-            if abs(current_ratio - recommended_ratio) > 0.05:
-                if current_ratio > recommended_ratio:
-                    m = int(abs(recommended_ratio * frame.shape[0] - frame.shape[1]) / 2)
-                    if rotate != -1:
-                        return cv2.rotate(cv2.resize(frame[:, m:-m, :3], recommended_size, interpolation=cv2.INTER_LINEAR), rotate)
-                    else:
-                        return cv2.resize(frame[:, m:-m, :3], recommended_size, interpolation=cv2.INTER_LINEAR)
-                else:
-                    m = int(abs(frame.shape[1] / recommended_ratio - frame.shape[0]) / 2)
-                    if rotate != -1:
-                        return cv2.rotate(cv2.resize(frame[m:-m, :, :3], recommended_size, interpolation=cv2.INTER_LINEAR), rotate)
-                    else:
-                        return cv2.resize(frame[m:-m, :, :3], recommended_size, interpolation=cv2.INTER_LINEAR)
-        if rotate != -1:
-            return cv2.rotate(frame if frame.ndim == 3 else np.copy(frame[:, :, :3]), rotate)
-        return frame if frame.ndim == 3 else np.copy(frame[:, :, :3])
+            if current_ratio > recommended_ratio:
+                m = int(abs(recommended_ratio * frame.shape[0] - frame.shape[1]) / 2)
+                frame = cv2.resize(frame[:, m:-m], recommended_size, interpolation=cv2.INTER_LINEAR)
+            else:
+                m = int(abs(frame.shape[1] / recommended_ratio - frame.shape[0]) / 2)
+                frame = cv2.resize(frame[m:-m, :], recommended_size, interpolation=cv2.INTER_LINEAR)
+        return np.array(frame, copy=True) if transformed else frame
+
 
 
 
