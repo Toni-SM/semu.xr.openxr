@@ -35,12 +35,28 @@ using namespace std;
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
-
+#include <openxr/openxr_reflection.h>
+	
 #ifndef _countof
 #define _countof(x) (sizeof(x)/sizeof((x)[0]))
 #endif
 
+// generate stringify functions for OpenXR enumerations
+#define ENUM_CASE_STR(name, val) case name: return #name;
+#define MAKE_TO_STRING_FUNC(enumType)                  \
+    inline const char* _enum_to_string(enumType e) {   \
+        switch (e) {                                   \
+            XR_LIST_ENUM_##enumType(ENUM_CASE_STR)     \
+            default: return "Unknown " #enumType;      \
+        }                                              \
+    }
 
+MAKE_TO_STRING_FUNC(XrReferenceSpaceType);
+MAKE_TO_STRING_FUNC(XrViewConfigurationType);
+MAKE_TO_STRING_FUNC(XrEnvironmentBlendMode);
+MAKE_TO_STRING_FUNC(XrSessionState);
+MAKE_TO_STRING_FUNC(XrResult);
+MAKE_TO_STRING_FUNC(XrFormFactor);
 
 
 struct SwapchainHandler{
@@ -672,11 +688,27 @@ private:
 	XrSpace xr_space_view = {};
 	XrSpace xr_space_local = {};
 	XrSpace xr_space_stage = {};
-	
+
+	// actions
 	XrActionSet xr_action_set;
 
-	vector<XrPath> subactionPaths;
-	XrAction actionHeadPose;
+	vector<XrAction> xr_actions_boolean;
+	vector<XrAction> xr_actions_float;
+	vector<XrAction> xr_actions_vector2f;
+	vector<XrAction> xr_actions_pose;
+	vector<XrAction> xr_actions_vibration;
+
+	vector<XrPath> xr_action_paths_boolean;
+	vector<XrPath> xr_action_paths_float;
+	vector<XrPath> xr_action_paths_vector2f;
+	vector<XrPath> xr_action_paths_pose;
+	vector<XrPath> xr_action_paths_vibration;
+
+	vector<string> xr_action_string_paths_boolean;
+	vector<string> xr_action_string_paths_float;
+	vector<string> xr_action_string_paths_vector2f;
+	vector<string> xr_action_string_paths_pose;
+	vector<string> xr_action_string_paths_vibration;
 
 	vector<XrViewConfigurationView> viewConfigurationViews;
 	vector<SwapchainHandler> swapchainsHandlers;
@@ -718,6 +750,7 @@ private:
 	bool defineSessionSpaces();
 	bool defineSwapchains();
 
+	void defineInteractionProfileBindings(vector<XrActionSuggestedBinding> &, vector<string>);
 	void cleanFrames(){
 		// for(size_t i = 0; i < framesData.size(); i++){
 		// 	framesData[i] = nullptr;
@@ -732,8 +765,11 @@ public:
 
 	bool createInstance(string, string, vector<string>, vector<string>);
 	bool getSystem(XrFormFactor, XrEnvironmentBlendMode, XrViewConfigurationType); 
-	bool createActionSet();
 	bool createSession();
+
+	bool addAction(string, XrActionType);
+	bool suggestInteractionProfileBindings();
+	bool createActionSet();
 
 	bool pollEvents(bool *);
 	bool pollActions();
@@ -877,11 +913,11 @@ bool OpenXrApplication::acquireSystemProperties(){
 bool OpenXrApplication::acquireBlendModes(XrEnvironmentBlendMode blendMode){
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateEnvironmentBlendModes(xr_instance, xr_system_id, configViewConfigurationType, 0, &propertyCountOutput, nullptr);
-	if(!xrCheckResult(NULL, xr_result, "xrEnumerateEnvironmentBlendModes"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateEnvironmentBlendModes"))
 		return false;
 	vector<XrEnvironmentBlendMode> environmentBlendModes(propertyCountOutput);
 	xr_result = xrEnumerateEnvironmentBlendModes(xr_instance, xr_system_id, configViewConfigurationType, propertyCountOutput, &propertyCountOutput, environmentBlendModes.data());
-	if(!xrCheckResult(NULL, xr_result, "xrEnumerateEnvironmentBlendModes"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateEnvironmentBlendModes"))
 		return false;
 
 	std::cout << "Environment blend modes (" << environmentBlendModes.size() << ")" << std::endl;
@@ -902,11 +938,11 @@ bool OpenXrApplication::acquireBlendModes(XrEnvironmentBlendMode blendMode){
 bool OpenXrApplication::acquireViewConfiguration(XrViewConfigurationType configurationType){
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateViewConfigurations(xr_instance, xr_system_id, 0, &propertyCountOutput, nullptr);
-	if(!xrCheckResult(NULL, xr_result, "xrEnumerateViewConfigurations"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateViewConfigurations"))
 		return false;
 	vector<XrViewConfigurationType> viewConfigurationTypes(propertyCountOutput);
 	xr_result = xrEnumerateViewConfigurations(xr_instance, xr_system_id, propertyCountOutput, &propertyCountOutput, viewConfigurationTypes.data());
-	if(!xrCheckResult(NULL, xr_result, "xrEnumerateViewConfigurations"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateViewConfigurations"))
 		return false;
 
 	std::cout << "View configurations (" << viewConfigurationTypes.size() << ")" << std::endl;
@@ -925,7 +961,7 @@ bool OpenXrApplication::acquireViewConfiguration(XrViewConfigurationType configu
 	// view configuration properties
 	XrViewConfigurationProperties viewConfigurationProperties = {XR_TYPE_VIEW_CONFIGURATION_PROPERTIES};
 	xr_result = xrGetViewConfigurationProperties(xr_instance, xr_system_id, configViewConfigurationType, &viewConfigurationProperties);
-	if(!xrCheckResult(NULL, xr_result, "xrGetViewConfigurationProperties"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrGetViewConfigurationProperties"))
 		return false;
 
 	std::cout << "View configuration properties" << std::endl;
@@ -934,11 +970,11 @@ bool OpenXrApplication::acquireViewConfiguration(XrViewConfigurationType configu
 	
 	// view configuration views
 	xr_result = xrEnumerateViewConfigurationViews(xr_instance, xr_system_id, configViewConfigurationType, 0, &propertyCountOutput, nullptr);
-	if(!xrCheckResult(NULL, xr_result, "xrEnumerateViewConfigurationViews"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateViewConfigurationViews"))
 		return false;
 	viewConfigurationViews.resize(propertyCountOutput, {XR_TYPE_VIEW_CONFIGURATION_VIEW});
 	xr_result = xrEnumerateViewConfigurationViews(xr_instance, xr_system_id, configViewConfigurationType, propertyCountOutput, &propertyCountOutput, viewConfigurationViews.data());
-	if(!xrCheckResult(NULL, xr_result, "xrEnumerateViewConfigurationViews"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateViewConfigurationViews"))
 		return false;
 	
 	std::cout << "View configuration views (" << viewConfigurationViews.size() << ")" << std::endl;
@@ -963,11 +999,11 @@ bool OpenXrApplication::defineReferenceSpaces(){
 	// get reference spaces
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateReferenceSpaces(xr_session, 0, &propertyCountOutput, nullptr);
-	if(!xrCheckResult(NULL, xr_result, "xrEnumerateReferenceSpaces"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateReferenceSpaces"))
 		return false;
 	vector<XrReferenceSpaceType> referenceSpaces(propertyCountOutput);
 	xr_result = xrEnumerateReferenceSpaces(xr_session, propertyCountOutput, &propertyCountOutput, referenceSpaces.data());
-	if(!xrCheckResult(NULL, xr_result, "xrEnumerateReferenceSpaces"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateReferenceSpaces"))
 		return false;
 
 	// create reference space
@@ -987,12 +1023,12 @@ bool OpenXrApplication::defineReferenceSpaces(){
 		// view
 		if(referenceSpaces[i] == XR_REFERENCE_SPACE_TYPE_VIEW){
 			xr_result = xrCreateReferenceSpace(xr_session, &referenceSpaceCreateInfo, &xr_space_view);
-			if(!xrCheckResult(NULL, xr_result, "xrCreateReferenceSpace (XR_REFERENCE_SPACE_TYPE_VIEW)"))
+			if(!xrCheckResult(xr_instance, xr_result, "xrCreateReferenceSpace (XR_REFERENCE_SPACE_TYPE_VIEW)"))
 				return false;
 
 			// get bounds
 			xr_result = xrGetReferenceSpaceBoundsRect(xr_session, XR_REFERENCE_SPACE_TYPE_VIEW, &spaceBounds);
-			if(!xrCheckResult(NULL, xr_result, "xrGetReferenceSpaceBoundsRect (XR_REFERENCE_SPACE_TYPE_VIEW)"))
+			if(!xrCheckResult(xr_instance, xr_result, "xrGetReferenceSpaceBoundsRect (XR_REFERENCE_SPACE_TYPE_VIEW)"))
 				return false;
 			
 			std::cout << "  |     |-- reference space bounds" << std::endl;
@@ -1002,12 +1038,12 @@ bool OpenXrApplication::defineReferenceSpaces(){
 		// local
 		else if(referenceSpaces[i] == XR_REFERENCE_SPACE_TYPE_LOCAL){
 			xr_result = xrCreateReferenceSpace(xr_session, &referenceSpaceCreateInfo, &xr_space_local);
-			if(!xrCheckResult(NULL, xr_result, "xrCreateReferenceSpace (XR_REFERENCE_SPACE_TYPE_LOCAL)"))
+			if(!xrCheckResult(xr_instance, xr_result, "xrCreateReferenceSpace (XR_REFERENCE_SPACE_TYPE_LOCAL)"))
 				return false;
 
 			// get bounds
 			xr_result = xrGetReferenceSpaceBoundsRect(xr_session, XR_REFERENCE_SPACE_TYPE_LOCAL, &spaceBounds);
-			if(!xrCheckResult(NULL, xr_result, "xrGetReferenceSpaceBoundsRect (XR_REFERENCE_SPACE_TYPE_LOCAL)"))
+			if(!xrCheckResult(xr_instance, xr_result, "xrGetReferenceSpaceBoundsRect (XR_REFERENCE_SPACE_TYPE_LOCAL)"))
 				return false;
 			
 			std::cout << "  |     |-- reference space bounds" << std::endl;
@@ -1017,12 +1053,12 @@ bool OpenXrApplication::defineReferenceSpaces(){
 		// stage
 		else if(referenceSpaces[i] == XR_REFERENCE_SPACE_TYPE_STAGE){
 			xr_result = xrCreateReferenceSpace(xr_session, &referenceSpaceCreateInfo, &xr_space_stage);
-			if(!xrCheckResult(NULL, xr_result, "xrCreateReferenceSpace (XR_REFERENCE_SPACE_TYPE_STAGE)"))
+			if(!xrCheckResult(xr_instance, xr_result, "xrCreateReferenceSpace (XR_REFERENCE_SPACE_TYPE_STAGE)"))
 				return false;
 
 			// get bounds
 			xr_result = xrGetReferenceSpaceBoundsRect(xr_session, XR_REFERENCE_SPACE_TYPE_STAGE, &spaceBounds);
-			if(!xrCheckResult(NULL, xr_result, "xrGetReferenceSpaceBoundsRect (XR_REFERENCE_SPACE_TYPE_STAGE)"))
+			if(!xrCheckResult(xr_instance, xr_result, "xrGetReferenceSpaceBoundsRect (XR_REFERENCE_SPACE_TYPE_STAGE)"))
 				return false;
 			
 			std::cout << "  |     |-- reference space bounds" << std::endl;
@@ -1034,21 +1070,27 @@ bool OpenXrApplication::defineReferenceSpaces(){
 }
 
 bool OpenXrApplication::defineSessionSpaces(){
-	// TODO: use an action handler
-	XrSessionActionSetsAttachInfo attachInfo = {XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO};
+	XrSessionActionSetsAttachInfo attachInfo{XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO};
 	attachInfo.countActionSets = 1;
 	attachInfo.actionSets = &xr_action_set;
 	xr_result = xrAttachSessionActionSets(xr_session, &attachInfo);
-	if(!xrCheckResult(NULL, xr_result, "xrAttachSessionActionSets"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrAttachSessionActionSets"))
 		return false;
 
-	XrActionSpaceCreateInfo actionSpaceInfo = {XR_TYPE_ACTION_SPACE_CREATE_INFO};
-	actionSpaceInfo.action = actionHeadPose;
-	actionSpaceInfo.poseInActionSpace.orientation.w = 1.f;
-	actionSpaceInfo.subactionPath = subactionPaths[0];
-	xr_result = xrCreateActionSpace(xr_session, &actionSpaceInfo, &spaceHead);
-	if(!xrCheckResult(NULL, xr_result, "xrCreateActionSpace"))
-		return false;
+	// // TODO: delete 
+	// XrInteractionProfileState interactionProfileState;
+	// xr_result = xrGetCurrentInteractionProfile(xr_session, XR_NULL_PATH, &interactionProfileState);
+	// if(!xrCheckResult(xr_instance, xr_result, "xrGetCurrentInteractionProfile"))
+	// 	return false;
+	// std::cout << "XrInteractionProfileState " << interactionProfileState.interactionProfile << std::endl;
+
+	// XrActionSpaceCreateInfo actionSpaceInfo = {XR_TYPE_ACTION_SPACE_CREATE_INFO};
+	// actionSpaceInfo.action = actionTestHead;
+	// actionSpaceInfo.poseInActionSpace.orientation.w = 1.f;
+	// // actionSpaceInfo.subactionPath = subactionPaths[0];
+	// xr_result = xrCreateActionSpace(xr_session, &actionSpaceInfo, &spaceHead);
+	// if(!xrCheckResult(xr_instance, xr_result, "xrCreateActionSpace"))
+	// 	return false;
 	return true;
 }
 
@@ -1056,11 +1098,11 @@ bool OpenXrApplication::defineSwapchains(){
 	// get swapchain Formats
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateSwapchainFormats(xr_session, 0, &propertyCountOutput, nullptr);
-	if(!xrCheckResult(NULL, xr_result, "xrEnumerateSwapchainFormats"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateSwapchainFormats"))
 		return false;
 	vector<int64_t> swapchainFormats(propertyCountOutput);
 	xr_result = xrEnumerateSwapchainFormats(xr_session, propertyCountOutput, &propertyCountOutput, swapchainFormats.data());
-	if(!xrCheckResult(NULL, xr_result, "xrEnumerateSwapchainFormats"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateSwapchainFormats"))
 		return false;
 
 	// select swapchain format
@@ -1105,7 +1147,7 @@ bool OpenXrApplication::defineSwapchains(){
 		
 		SwapchainHandler swapchain;
 		xr_result = xrCreateSwapchain(xr_session, &swapchainCreateInfo, &swapchain.handle);
-		if(!xrCheckResult(NULL, xr_result, "xrCreateSwapchain"))
+		if(!xrCheckResult(xr_instance, xr_result, "xrCreateSwapchain"))
 			return false;
 
 		swapchain.width = swapchainCreateInfo.width;
@@ -1118,7 +1160,7 @@ bool OpenXrApplication::defineSwapchains(){
 	
 		// enumerate swapchain images
 		xr_result = xrEnumerateSwapchainImages(swapchain.handle, 0, &propertyCountOutput, nullptr);
-		if(!xrCheckResult(NULL, xr_result, "xrEnumerateSwapchainImages"))
+		if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateSwapchainImages"))
 			return false;
 
 		swapchain.length = propertyCountOutput;
@@ -1197,56 +1239,453 @@ bool OpenXrApplication::getSystem(XrFormFactor formFactor, XrEnvironmentBlendMod
 	return true;
 }
 
+bool OpenXrApplication::addAction(string stringPath, XrActionType actionType){
+	XrPath path;
+	XrAction action;
+	xrStringToPath(xr_instance, stringPath.c_str(), &path);
+
+	string actionName = "";
+	string localizedActionName = "";
+
+	if(actionType == XR_ACTION_TYPE_BOOLEAN_INPUT)
+		actionName = "action_boolean_" + std::to_string(xr_actions_boolean.size());
+	else if(actionType == XR_ACTION_TYPE_FLOAT_INPUT)
+		actionName = "action_float_" + std::to_string(xr_actions_float.size());
+	else if(actionType == XR_ACTION_TYPE_VECTOR2F_INPUT)
+		actionName = "action_vector2f_" + std::to_string(xr_actions_vector2f.size());
+	else if(actionType == XR_ACTION_TYPE_POSE_INPUT)
+		actionName = "action_pose_" + std::to_string(xr_actions_pose.size());
+	else if(actionType == XR_ACTION_TYPE_VIBRATION_OUTPUT)
+		actionName = "action_vibration_" + std::to_string(xr_actions_vibration.size());
+	localizedActionName = "localized_" + actionName;
+
+	XrActionCreateInfo actionInfo = {XR_TYPE_ACTION_CREATE_INFO};
+	actionInfo.actionType = actionType;
+	strcpy(actionInfo.actionName, actionName.c_str());
+	strcpy(actionInfo.localizedActionName, localizedActionName.c_str());
+	actionInfo.countSubactionPaths = 0;
+	actionInfo.subactionPaths = nullptr;
+	
+	xr_result = xrCreateAction(xr_action_set, &actionInfo, &action);
+	if(!xrCheckResult(xr_instance, xr_result, "xrCreateAction"))
+		return false;
+	
+	if(actionType == XR_ACTION_TYPE_BOOLEAN_INPUT){
+		xr_actions_boolean.push_back(action); 
+		xr_action_paths_boolean.push_back(path); 
+		xr_action_string_paths_boolean.push_back(stringPath); 
+	}
+	else if(actionType == XR_ACTION_TYPE_FLOAT_INPUT){
+		xr_actions_float.push_back(action); 
+		xr_action_paths_float.push_back(path); 
+		xr_action_string_paths_float.push_back(stringPath); 
+	}
+	else if(actionType == XR_ACTION_TYPE_VECTOR2F_INPUT){
+		xr_actions_vector2f.push_back(action); 
+		xr_action_paths_vector2f.push_back(path); 
+		xr_action_string_paths_vector2f.push_back(stringPath); 
+	}
+	else if(actionType == XR_ACTION_TYPE_POSE_INPUT){
+		xr_actions_pose.push_back(action); 
+		xr_action_paths_pose.push_back(path); 
+		xr_action_string_paths_pose.push_back(stringPath); 
+	}
+	else if(actionType == XR_ACTION_TYPE_VIBRATION_OUTPUT){
+		xr_actions_vibration.push_back(action); 
+		xr_action_paths_vibration.push_back(path); 
+		xr_action_string_paths_vibration.push_back(stringPath); 
+	}
+	return true;
+}
+
 bool OpenXrApplication::createActionSet(){
 	// TODO: use an action handler
-	
 	XrActionSetCreateInfo actionSetInfo = {XR_TYPE_ACTION_SET_CREATE_INFO};
-	strcpy(actionSetInfo.actionSetName, "gameplay");
-	strcpy(actionSetInfo.localizedActionSetName, "Gameplay");
+	strcpy(actionSetInfo.actionSetName, "actionset");
+	strcpy(actionSetInfo.localizedActionSetName, "ActionSet");
 	actionSetInfo.priority = 0;
 
 	xr_result = xrCreateActionSet(xr_instance, &actionSetInfo, &xr_action_set);
-	if(!xrCheckResult(NULL, xr_result, "xrCreateActionSet"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrCreateActionSet"))
 		return false;
+	return true;
+}
 
-	// action space for headset pose
-	subactionPaths.resize(1);
-	xr_result = xrStringToPath(xr_instance, "/user/head", &subactionPaths[0]);
-	if(!xrCheckResult(NULL, xr_result, "xrStringToPath"))
-		return false;
+void OpenXrApplication::defineInteractionProfileBindings(vector<XrActionSuggestedBinding> & bindings, vector<string> validPaths){
+	for(size_t i = 0; i < xr_actions_boolean.size(); i++)
+		if(std::find(validPaths.begin(), validPaths.end(), xr_action_string_paths_boolean[i]) != validPaths.end()){
+			XrActionSuggestedBinding binding;
+			binding.action = xr_actions_boolean[i];
+			binding.binding = xr_action_paths_boolean[i];
+			bindings.push_back(binding);
+		}
+	for(size_t i = 0; i < xr_actions_float.size(); i++)
+		if(std::find(validPaths.begin(), validPaths.end(), xr_action_string_paths_float[i]) != validPaths.end()){
+			XrActionSuggestedBinding binding;
+			binding.action = xr_actions_float[i];
+			binding.binding = xr_action_paths_float[i];
+			bindings.push_back(binding);
+		}
+	for(size_t i = 0; i < xr_actions_vector2f.size(); i++)
+		if(std::find(validPaths.begin(), validPaths.end(), xr_action_string_paths_vector2f[i]) != validPaths.end()){
+			XrActionSuggestedBinding binding;
+			binding.action = xr_actions_vector2f[i];
+			binding.binding = xr_action_paths_vector2f[i];
+			bindings.push_back(binding);
+		}
+	for(size_t i = 0; i < xr_actions_pose.size(); i++)
+		if(std::find(validPaths.begin(), validPaths.end(), xr_action_string_paths_pose[i]) != validPaths.end()){
+			XrActionSuggestedBinding binding;
+			binding.action = xr_actions_pose[i];
+			binding.binding = xr_action_paths_pose[i];
+			bindings.push_back(binding);
+		}
+	for(size_t i = 0; i < xr_actions_vibration.size(); i++)
+		if(std::find(validPaths.begin(), validPaths.end(), xr_action_string_paths_vibration[i]) != validPaths.end()){
+			XrActionSuggestedBinding binding;
+			binding.action = xr_actions_vibration[i];
+			binding.binding = xr_action_paths_vibration[i];
+			bindings.push_back(binding);
+		}
+}
 
-	XrActionCreateInfo actionInfo = {XR_TYPE_ACTION_CREATE_INFO};
-	actionInfo.actionType = XR_ACTION_TYPE_POSE_INPUT;
-	strcpy(actionInfo.actionName, "head_pose");
-	strcpy(actionInfo.localizedActionName, "Head Pose");
-	actionInfo.countSubactionPaths = uint32_t(subactionPaths.size());
-	actionInfo.subactionPaths = subactionPaths.data();
-	xr_result = xrCreateAction(xr_action_set, &actionInfo, &actionHeadPose);
-	if(!xrCheckResult(NULL, xr_result, "xrCreateAction"))
-		return false;
+bool OpenXrApplication::suggestInteractionProfileBindings(){
+	vector<string> validPathsKhronosSimpleController = {{"/user/hand/left/input/select/click"},
+														{"/user/hand/left/input/menu/click"},
+														{"/user/hand/left/input/grip/pose"},
+														{"/user/hand/left/input/aim/pose"},
+														{"/user/hand/left/output/haptic"},
+														{"/user/hand/right/input/select/click"},
+														{"/user/hand/right/input/menu/click"},
+														{"/user/hand/right/input/grip/pose"},
+														{"/user/hand/right/input/aim/pose"},
+														{"/user/hand/right/output/haptic"}};
 
-	// // suggest bindings for KHR
-	// {
-	// 	XrPath khrSimpleInteractionProfilePath;
-	// 	xr_result = xrStringToPath(xr_instance, "/interaction_profiles/khr/simple_controller", &khrSimpleInteractionProfilePath);
-	// 	if(!xrCheckResult(NULL, xr_result, "xrStringToPath"))
-	// 		return false;
-	// 	vector<XrActionSuggestedBinding> bindings = {{{actionHeadPose, },
-	// 													{m_input.grabAction, selectPath[Side::RIGHT]},
-	// 													{m_input.poseAction, posePath[Side::LEFT]},
-	// 													{m_input.poseAction, posePath[Side::RIGHT]},
-	// 													{m_input.quitAction, menuClickPath[Side::LEFT]},
-	// 													{m_input.quitAction, menuClickPath[Side::RIGHT]},
-	// 													{m_input.vibrateAction, hapticPath[Side::LEFT]},
-	// 													{m_input.vibrateAction, hapticPath[Side::RIGHT]}}};
-	// 	XrInteractionProfileSuggestedBinding suggestedBindings{XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING};
-	// 	suggestedBindings.interactionProfile = khrSimpleInteractionProfilePath;
-	// 	suggestedBindings.suggestedBindings = bindings.data();
-	// 	suggestedBindings.countSuggestedBindings = (uint32_t)bindings.size();
-	// 	CHECK_XRCMD(xrSuggestInteractionProfileBindings(m_instance, &suggestedBindings));
-	// }
+	vector<string> validPathsGoogleDaydreamController = {{"/user/hand/left/input/select/click"},
+													     {"/user/hand/left/input/trackpad/x"},
+													     {"/user/hand/left/input/trackpad/y"},
+													     {"/user/hand/left/input/trackpad/click"},
+													     {"/user/hand/left/input/trackpad/touch"},
+													     {"/user/hand/left/input/grip/pose"},
+													     {"/user/hand/left/input/aim/pose"},
+														 {"/user/hand/right/input/select/click"},
+														 {"/user/hand/right/input/trackpad/x"},
+														 {"/user/hand/right/input/trackpad/y"},
+														 {"/user/hand/right/input/trackpad/click"},
+														 {"/user/hand/right/input/trackpad/touch"},
+														 {"/user/hand/right/input/grip/pose"},
+														 {"/user/hand/right/input/aim/pose"}};
 
-	// https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_sample_code
+	vector<string> validPathsHTCViveController = {{"/user/hand/left/input/system/click"},
+												  {"/user/hand/left/input/squeeze/click"},
+												  {"/user/hand/left/input/menu/click"},
+												  {"/user/hand/left/input/trigger/click"},
+												  {"/user/hand/left/input/trigger/value"},
+												  {"/user/hand/left/input/trackpad/x"},
+												  {"/user/hand/left/input/trackpad/y"},
+												  {"/user/hand/left/input/trackpad/click"},
+												  {"/user/hand/left/input/trackpad/touch"},
+												  {"/user/hand/left/input/grip/pose"},
+												  {"/user/hand/left/input/aim/pose"},
+												  {"/user/hand/left/output/haptic"},
+												  {"/user/hand/right/input/system/click"},
+												  {"/user/hand/right/input/squeeze/click"},
+												  {"/user/hand/right/input/menu/click"},
+												  {"/user/hand/right/input/trigger/click"},
+												  {"/user/hand/right/input/trigger/value"},
+												  {"/user/hand/right/input/trackpad/x"},
+												  {"/user/hand/right/input/trackpad/y"},
+												  {"/user/hand/right/input/trackpad/click"},
+												  {"/user/hand/right/input/trackpad/touch"},
+												  {"/user/hand/right/input/grip/pose"},
+												  {"/user/hand/right/input/aim/pose"},
+												  {"/user/hand/right/output/haptic"}};
+  
+	vector<string> validPathsHTCVivePro = {{"/user/head/input/system/click"},
+										   {"/user/head/input/volume_up/click"},
+										   {"/user/head/input/volume_down/click"},
+										   {"/user/head/input/mute_mic/click"}};
+
+	vector<string> validPathsMicrosoftMixedRealityMotionController = {{"/user/hand/left/input/menu/click"},
+																	  {"/user/hand/left/input/squeeze/click"},
+																	  {"/user/hand/left/input/trigger/value"},
+																	  {"/user/hand/left/input/thumbstick/x"},
+																	  {"/user/hand/left/input/thumbstick/y"},
+																	  {"/user/hand/left/input/thumbstick/click"},
+																	  {"/user/hand/left/input/trackpad/x"},
+																	  {"/user/hand/left/input/trackpad/y"},
+																	  {"/user/hand/left/input/trackpad/click"},
+																	  {"/user/hand/left/input/trackpad/touch"},
+																	  {"/user/hand/left/input/grip/pose"},
+																	  {"/user/hand/left/input/aim/pose"},
+																	  {"/user/hand/left/output/haptic"},
+																	  {"/user/hand/right/input/menu/click"},
+																	  {"/user/hand/right/input/squeeze/click"},
+																	  {"/user/hand/right/input/trigger/value"},
+																	  {"/user/hand/right/input/thumbstick/x"},
+																	  {"/user/hand/right/input/thumbstick/y"},
+																	  {"/user/hand/right/input/thumbstick/click"},
+																	  {"/user/hand/right/input/trackpad/x"},
+																	  {"/user/hand/right/input/trackpad/y"},
+																	  {"/user/hand/right/input/trackpad/click"},
+																	  {"/user/hand/right/input/trackpad/touch"},
+																	  {"/user/hand/right/input/grip/pose"},
+																	  {"/user/hand/right/input/aim/pose"},
+																	  {"/user/hand/right/output/haptic"}};
+  
+	vector<string> validPathsMicrosoftXboxController = {{"/user/gamepad/input/menu/click"},
+														{"/user/gamepad/input/view/click"},
+														{"/user/gamepad/input/a/click"},
+														{"/user/gamepad/input/b/click"},
+														{"/user/gamepad/input/x/click"},
+														{"/user/gamepad/input/y/click"},
+														{"/user/gamepad/input/dpad_down/click"},
+														{"/user/gamepad/input/dpad_right/click"},
+														{"/user/gamepad/input/dpad_up/click"},
+														{"/user/gamepad/input/dpad_left/click"},
+														{"/user/gamepad/input/shoulder_left/click"},
+														{"/user/gamepad/input/shoulder_right/click"},
+														{"/user/gamepad/input/thumbstick_left/click"},
+														{"/user/gamepad/input/thumbstick_right/click"},
+														{"/user/gamepad/input/trigger_left/value"},
+														{"/user/gamepad/input/trigger_right/value"},
+														{"/user/gamepad/input/thumbstick_left/x"},
+														{"/user/gamepad/input/thumbstick_left/y"},
+														{"/user/gamepad/input/thumbstick_right/x"},
+														{"/user/gamepad/input/thumbstick_right/y"},
+														{"/user/gamepad/output/haptic_left"},
+														{"/user/gamepad/output/haptic_right"},
+														{"/user/gamepad/output/haptic_left_trigger"},
+														{"/user/gamepad/output/haptic_right_trigger"}};
+
+	vector<string> validPathsOculusGoController = {{"/user/hand/left/input/system/click"},
+													{"/user/hand/left/input/trigger/click"},
+													{"/user/hand/left/input/back/click"},
+													{"/user/hand/left/input/trackpad/x"},
+													{"/user/hand/left/input/trackpad/y"},
+													{"/user/hand/left/input/trackpad/click"},
+													{"/user/hand/left/input/trackpad/touch"},
+													{"/user/hand/left/input/grip/pose"},
+													{"/user/hand/left/input/aim/pose"},
+													{"/user/hand/right/input/system/click"},
+													{"/user/hand/right/input/trigger/click"},
+													{"/user/hand/right/input/back/click"},
+													{"/user/hand/right/input/trackpad/x"},
+													{"/user/hand/right/input/trackpad/y"},
+													{"/user/hand/right/input/trackpad/click"},
+													{"/user/hand/right/input/trackpad/touch"},
+													{"/user/hand/right/input/grip/pose"},
+													{"/user/hand/right/input/aim/pose"}};
+
+	vector<string> validPathsOculusTouchController = {{"/user/hand/left/input/squeeze/value"},
+														{"/user/hand/left/input/trigger/value"},
+														{"/user/hand/left/input/trigger/touch"},
+														{"/user/hand/left/input/thumbstick/x"},
+														{"/user/hand/left/input/thumbstick/y"},
+														{"/user/hand/left/input/thumbstick/click"},
+														{"/user/hand/left/input/thumbstick/touch"},
+														{"/user/hand/left/input/thumbrest/touch"},
+														{"/user/hand/left/input/grip/pose"},
+														{"/user/hand/left/input/aim/pose"},
+														{"/user/hand/left/output/haptic"},
+														{"/user/hand/left/input/x/click"},
+														{"/user/hand/left/input/x/touch"},
+														{"/user/hand/left/input/y/click"},
+														{"/user/hand/left/input/y/touch"},
+														{"/user/hand/left/input/menu/click"},
+														{"/user/hand/right/input/squeeze/value"},
+														{"/user/hand/right/input/trigger/value"},
+														{"/user/hand/right/input/trigger/touch"},
+														{"/user/hand/right/input/thumbstick/x"},
+														{"/user/hand/right/input/thumbstick/y"},
+														{"/user/hand/right/input/thumbstick/click"},
+														{"/user/hand/right/input/thumbstick/touch"},
+														{"/user/hand/right/input/thumbrest/touch"},
+														{"/user/hand/right/input/grip/pose"},
+														{"/user/hand/right/input/aim/pose"},
+														{"/user/hand/right/output/haptic"},
+														{"/user/hand/right/input/a/click"},
+														{"/user/hand/right/input/a/touch"},
+														{"/user/hand/right/input/b/click"},
+														{"/user/hand/right/input/b/touch"},
+														{"/user/hand/right/input/system/click"}};
+
+	vector<string> validPathsValveIndexController = {{"/user/hand/left/input/system/click"},
+													{"/user/hand/left/input/system/touch"},
+													{"/user/hand/left/input/a/click"},
+													{"/user/hand/left/input/a/touch"},
+													{"/user/hand/left/input/b/click"},
+													{"/user/hand/left/input/b/touch"},
+													{"/user/hand/left/input/squeeze/value"},
+													{"/user/hand/left/input/squeeze/force"},
+													{"/user/hand/left/input/trigger/click"},
+													{"/user/hand/left/input/trigger/value"},
+													{"/user/hand/left/input/trigger/touch"},
+													{"/user/hand/left/input/thumbstick/x"},
+													{"/user/hand/left/input/thumbstick/y"},
+													{"/user/hand/left/input/thumbstick/click"},
+													{"/user/hand/left/input/thumbstick/touch"},
+													{"/user/hand/left/input/trackpad/x"},
+													{"/user/hand/left/input/trackpad/y"},
+													{"/user/hand/left/input/trackpad/force"},
+													{"/user/hand/left/input/trackpad/touch"},
+													{"/user/hand/left/input/grip/pose"},
+													{"/user/hand/left/input/aim/pose"},
+													{"/user/hand/left/output/haptic"},
+													{"/user/hand/right/input/system/click"},
+													{"/user/hand/right/input/system/touch"},
+													{"/user/hand/right/input/a/click"},
+													{"/user/hand/right/input/a/touch"},
+													{"/user/hand/right/input/b/click"},
+													{"/user/hand/right/input/b/touch"},
+													{"/user/hand/right/input/squeeze/value"},
+													{"/user/hand/right/input/squeeze/force"},
+													{"/user/hand/right/input/trigger/click"},
+													{"/user/hand/right/input/trigger/value"},
+													{"/user/hand/right/input/trigger/touch"},
+													{"/user/hand/right/input/thumbstick/x"},
+													{"/user/hand/right/input/thumbstick/y"},
+													{"/user/hand/right/input/thumbstick/click"},
+													{"/user/hand/right/input/thumbstick/touch"},
+													{"/user/hand/right/input/trackpad/x"},
+													{"/user/hand/right/input/trackpad/y"},
+													{"/user/hand/right/input/trackpad/force"},
+													{"/user/hand/right/input/trackpad/touch"},
+													{"/user/hand/right/input/grip/pose"},
+													{"/user/hand/right/input/aim/pose"},
+													{"/user/hand/right/output/haptic"}};
+
+	XrPath interactionProfilePath;
+	vector<XrActionSuggestedBinding> bindings;
+	XrInteractionProfileSuggestedBinding suggestedBindings = {XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING};
+	std::cout << "Suggested interaction bindings by profiles" << std::endl;
+
+	// Khronos Simple Controller
+	bindings.clear();
+	xrStringToPath(xr_instance, "/interaction_profiles/khr/simple_controller", &interactionProfilePath);
+	defineInteractionProfileBindings(bindings, validPathsKhronosSimpleController);
+	if(bindings.size()){
+		suggestedBindings.interactionProfile = interactionProfilePath;
+		suggestedBindings.suggestedBindings = bindings.data();
+		suggestedBindings.countSuggestedBindings = (uint32_t)bindings.size();
+		xr_result = xrSuggestInteractionProfileBindings(xr_instance, &suggestedBindings);
+		if(!xrCheckResult(xr_instance, xr_result, "xrSuggestInteractionProfileBindings /interaction_profiles/khr/simple_controller"))
+			return false;
+	}
+	std::cout << "  |-- /interaction_profiles/khr/simple_controller (" << bindings.size() << ")" << std::endl;
+	
+	// Google Daydream Controller
+	bindings.clear();
+	xrStringToPath(xr_instance, "/interaction_profiles/google/daydream_controller", &interactionProfilePath);
+	defineInteractionProfileBindings(bindings, validPathsGoogleDaydreamController);
+	if(bindings.size()){
+		suggestedBindings.interactionProfile = interactionProfilePath;
+		suggestedBindings.suggestedBindings = bindings.data();
+		suggestedBindings.countSuggestedBindings = (uint32_t)bindings.size();
+		xr_result = xrSuggestInteractionProfileBindings(xr_instance, &suggestedBindings);
+		if(!xrCheckResult(xr_instance, xr_result, "xrSuggestInteractionProfileBindings /interaction_profiles/google/daydream_controller"))
+			return false;
+	}
+	std::cout << "  |-- /interaction_profiles/google/daydream_controller (" << bindings.size() << ")" << std::endl;
+
+	// HTC Vive Controller
+	bindings.clear();
+	xrStringToPath(xr_instance, "/interaction_profiles/htc/vive_controller", &interactionProfilePath);
+	defineInteractionProfileBindings(bindings, validPathsHTCViveController);
+	if(bindings.size()){
+		suggestedBindings.interactionProfile = interactionProfilePath;
+		suggestedBindings.suggestedBindings = bindings.data();
+		suggestedBindings.countSuggestedBindings = (uint32_t)bindings.size();
+		xr_result = xrSuggestInteractionProfileBindings(xr_instance, &suggestedBindings);
+		if(!xrCheckResult(xr_instance, xr_result, "xrSuggestInteractionProfileBindings /interaction_profiles/htc/vive_controller"))
+			return false;
+	}
+	std::cout << "  |-- /interaction_profiles/htc/vive_controller (" << bindings.size() << ")" << std::endl;
+
+	// HTC Vive Pro
+	bindings.clear();
+	xrStringToPath(xr_instance, "/interaction_profiles/htc/vive_pro", &interactionProfilePath);
+	defineInteractionProfileBindings(bindings, validPathsHTCVivePro);
+	if(bindings.size()){
+		suggestedBindings.interactionProfile = interactionProfilePath;
+		suggestedBindings.suggestedBindings = bindings.data();
+		suggestedBindings.countSuggestedBindings = (uint32_t)bindings.size();
+		xr_result = xrSuggestInteractionProfileBindings(xr_instance, &suggestedBindings);
+		if(!xrCheckResult(xr_instance, xr_result, "xrSuggestInteractionProfileBindings /interaction_profiles/htc/vive_pro"))
+			return false;
+	}
+	std::cout << "  |-- /interaction_profiles/htc/vive_pro (" << bindings.size() << ")" << std::endl;
+
+	// Microsoft Mixed Reality Motion Controller
+	bindings.clear();
+	xrStringToPath(xr_instance, "/interaction_profiles/microsoft/motion_controller", &interactionProfilePath);
+	defineInteractionProfileBindings(bindings, validPathsMicrosoftMixedRealityMotionController);
+	if(bindings.size()){
+		suggestedBindings.interactionProfile = interactionProfilePath;
+		suggestedBindings.suggestedBindings = bindings.data();
+		suggestedBindings.countSuggestedBindings = (uint32_t)bindings.size();
+		xr_result = xrSuggestInteractionProfileBindings(xr_instance, &suggestedBindings);
+		if(!xrCheckResult(xr_instance, xr_result, "xrSuggestInteractionProfileBindings /interaction_profiles/microsoft/motion_controller"))
+			return false;
+	}
+	std::cout << "  |-- /interaction_profiles/microsoft/motion_controller (" << bindings.size() << ")" << std::endl;
+
+	// Microsoft Xbox Controller
+	bindings.clear();
+	xrStringToPath(xr_instance, "/interaction_profiles/microsoft/xbox_controller", &interactionProfilePath);
+	defineInteractionProfileBindings(bindings, validPathsMicrosoftXboxController);
+	if(bindings.size()){
+		suggestedBindings.interactionProfile = interactionProfilePath;
+		suggestedBindings.suggestedBindings = bindings.data();
+		suggestedBindings.countSuggestedBindings = (uint32_t)bindings.size();
+		xr_result = xrSuggestInteractionProfileBindings(xr_instance, &suggestedBindings);
+		if(!xrCheckResult(xr_instance, xr_result, "xrSuggestInteractionProfileBindings /interaction_profiles/microsoft/xbox_controller"))
+			return false;
+	}
+	std::cout << "  |-- /interaction_profiles/microsoft/xbox_controller (" << bindings.size() << ")" << std::endl;
+
+	// Oculus Go Controller
+	bindings.clear();
+	xrStringToPath(xr_instance, "/interaction_profiles/oculus/go_controller", &interactionProfilePath);
+	defineInteractionProfileBindings(bindings, validPathsOculusGoController);
+	if(bindings.size()){
+		suggestedBindings.interactionProfile = interactionProfilePath;
+		suggestedBindings.suggestedBindings = bindings.data();
+		suggestedBindings.countSuggestedBindings = (uint32_t)bindings.size();
+		xr_result = xrSuggestInteractionProfileBindings(xr_instance, &suggestedBindings);
+		if(!xrCheckResult(xr_instance, xr_result, "xrSuggestInteractionProfileBindings /interaction_profiles/oculus/go_controller"))
+			return false;
+	}
+	std::cout << "  |-- /interaction_profiles/oculus/go_controller (" << bindings.size() << ")" << std::endl;
+
+	// Oculus Touch Controller
+	bindings.clear();
+	xrStringToPath(xr_instance, "/interaction_profiles/oculus/touch_controller", &interactionProfilePath);
+	defineInteractionProfileBindings(bindings, validPathsOculusTouchController);
+	if(bindings.size()){
+		suggestedBindings.interactionProfile = interactionProfilePath;
+		suggestedBindings.suggestedBindings = bindings.data();
+		suggestedBindings.countSuggestedBindings = (uint32_t)bindings.size();
+		xr_result = xrSuggestInteractionProfileBindings(xr_instance, &suggestedBindings);
+		if(!xrCheckResult(xr_instance, xr_result, "xrSuggestInteractionProfileBindings /interaction_profiles/oculus/touch_controller"))
+			return false;
+	}
+	std::cout << "  |-- /interaction_profiles/oculus/touch_controller (" << bindings.size() << ")" << std::endl;
+
+	// Valve Index Controller
+	bindings.clear();
+	xrStringToPath(xr_instance, "/interaction_profiles/valve/index_controller", &interactionProfilePath);
+	defineInteractionProfileBindings(bindings, validPathsValveIndexController);
+	if(bindings.size()){
+		suggestedBindings.interactionProfile = interactionProfilePath;
+		suggestedBindings.suggestedBindings = bindings.data();
+		suggestedBindings.countSuggestedBindings = (uint32_t)bindings.size();
+		xr_result = xrSuggestInteractionProfileBindings(xr_instance, &suggestedBindings);
+		if(!xrCheckResult(xr_instance, xr_result, "xrSuggestInteractionProfileBindings /interaction_profiles/valve/index_controller"))
+			return false;
+	}
+	std::cout << "  |-- /interaction_profiles/valve/index_controller (" << bindings.size() << ")" << std::endl;
+	
 	return true;
 }
 
@@ -1297,11 +1736,15 @@ bool OpenXrApplication::createSession(){
 	sessionInfo.systemId = xr_system_id;
 
 	xr_result = xrCreateSession(xr_instance, &sessionInfo, &xr_session);
-	if(!xrCheckResult(NULL, xr_result, "xrCreateSession"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrCreateSession"))
 		return false;
 
 	// reference spaces
 	if(!defineReferenceSpaces())
+		return false;
+
+	// suggest interaction profile bindings
+	if(!suggestInteractionProfileBindings())
 		return false;
 
 	// action spaces / attach session action sets
@@ -1324,27 +1767,44 @@ bool OpenXrApplication::pollEvents(bool * exitLoop){
 		event.next = nullptr;
 
 		xr_result = xrPollEvent(xr_instance, &event);
-		if(!xrCheckResult(NULL, xr_result, "xrPollEvent"))
+		if(!xrCheckResult(xr_instance, xr_result, "xrPollEvent"))
 			return false;
 
 		// process messages
 		switch(event.type){
+			case XR_EVENT_UNAVAILABLE: {
+				return true;
+				break;
+			}
+			case XR_TYPE_EVENT_DATA_BUFFER: {
+				return true;
+				break;
+			}
+			// event queue overflowed (some events were removed)
+			case XR_TYPE_EVENT_DATA_EVENTS_LOST: {
+                const XrEventDataEventsLost & eventsLost = *reinterpret_cast<XrEventDataEventsLost*>(&event);
+				std::cout << "Event queue has overflowed (" << eventsLost.lostEventCount << " overflowed event(s))" << std::endl;
+				break;
+            }
 			// session state changed
 			case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: {
 				const XrEventDataSessionStateChanged & sessionStateChangedEvent = *reinterpret_cast<XrEventDataSessionStateChanged*>(&event);
+
+				std::cout << "XrEventDataSessionStateChanged to " << _enum_to_string(sessionStateChangedEvent.state) << " (" << sessionStateChangedEvent.state << ")" << std::endl;
 				
 				// check session
 				if((sessionStateChangedEvent.session != XR_NULL_HANDLE) && (sessionStateChangedEvent.session != xr_session)){
 					std::cout << "XrEventDataSessionStateChanged for unknown session " << sessionStateChangedEvent.session << std::endl;
 					return false;
 				}
-
+				
+				// handle session state
 				switch(sessionStateChangedEvent.state){
 					case XR_SESSION_STATE_READY: {
 						XrSessionBeginInfo sessionBeginInfo = {XR_TYPE_SESSION_BEGIN_INFO};
 						sessionBeginInfo.primaryViewConfigurationType = configViewConfigurationType;
 						xr_result = xrBeginSession(xr_session, &sessionBeginInfo);
-						if(!xrCheckResult(NULL, xr_result, "xrBeginSession"))
+						if(!xrCheckResult(xr_instance, xr_result, "xrBeginSession"))
 							return false;
 
 						flagSessionRunning = true;
@@ -1353,7 +1813,7 @@ bool OpenXrApplication::pollEvents(bool * exitLoop){
 					}
 					case XR_SESSION_STATE_STOPPING: {
 						xr_result = xrEndSession(xr_session);
-						if(!xrCheckResult(NULL, xr_result, "xrEndSession"))
+						if(!xrCheckResult(xr_instance, xr_result, "xrEndSession"))
 							return false;
 
 						flagSessionRunning = false;
@@ -1375,6 +1835,7 @@ bool OpenXrApplication::pollEvents(bool * exitLoop){
 				}
 				break;
 			}
+			// application is about to lose the XrInstance 
 			case XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING: {
 				const XrEventDataInstanceLossPending & instanceLossPending = *reinterpret_cast<XrEventDataInstanceLossPending*>(&event);				
 				*exitLoop = true;
@@ -1391,12 +1852,12 @@ bool OpenXrApplication::pollEvents(bool * exitLoop){
 				// LogActionSourceName(m_input.vibrateAction, "Vibrate");
 				break;
 			}
-			case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING:
+			// reference space is changing
+			case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING: {
+				const XrEventDataReferenceSpaceChangePending & referenceSpaceChangePending = *reinterpret_cast<XrEventDataReferenceSpaceChangePending*>(&event);
+				std::cout << "XrEventDataReferenceSpaceChangePending for " << _enum_to_string(referenceSpaceChangePending.referenceSpaceType) << std::endl;
 				break;
-			case XR_EVENT_UNAVAILABLE:
-				return true;
-			case XR_TYPE_EVENT_DATA_BUFFER:
-				return true;
+			}
 			default:
 				break;
 		}
@@ -1406,6 +1867,63 @@ bool OpenXrApplication::pollEvents(bool * exitLoop){
 
 bool OpenXrApplication::pollActions(){
 	// TODO: implement
+	// sync actions
+	XrActiveActionSet activeActionSet = {xr_action_set, XR_NULL_PATH};
+	XrActionsSyncInfo syncInfo = {XR_TYPE_ACTIONS_SYNC_INFO};
+	syncInfo.countActiveActionSets = 1;
+	syncInfo.activeActionSets = &activeActionSet;
+	xr_result = xrSyncActions(xr_session, &syncInfo);
+	if(!xrCheckResult(xr_instance, xr_result, "xrSyncActions"))
+		return false;
+
+	XrActionStateGetInfo getInfo = {XR_TYPE_ACTION_STATE_GET_INFO};
+	getInfo.next = nullptr;
+	getInfo.subactionPath = XR_NULL_PATH;
+
+	// boolean
+	XrActionStateBoolean actionStateBoolean = {XR_TYPE_ACTION_STATE_BOOLEAN};
+	for(size_t i = 0; i < xr_actions_boolean.size(); i++){
+		getInfo.action = xr_actions_boolean[i];
+		xr_result = xrGetActionStateBoolean(xr_session, &getInfo, &actionStateBoolean);
+		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStateBoolean"))
+			return false;
+		if(actionStateBoolean.isActive && actionStateBoolean.changedSinceLastSync)
+			std::cout << "ACTION: actionStateBoolean " << xr_action_string_paths_boolean[i] << " " << actionStateBoolean.currentState << std::endl;
+	}
+
+	// float
+	XrActionStateFloat actionStateFloat = {XR_TYPE_ACTION_STATE_FLOAT};
+	for(size_t i = 0; i < xr_actions_float.size(); i++){
+		getInfo.action = xr_actions_float[i];
+		xr_result = xrGetActionStateFloat(xr_session, &getInfo, &actionStateFloat);
+		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStateFloat"))
+			return false;
+		if(actionStateFloat.isActive && actionStateFloat.changedSinceLastSync)
+			std::cout << "ACTION: actionStateFloat " << xr_action_string_paths_float[i] << " " << actionStateFloat.currentState << std::endl;
+	}
+
+	// vector2f
+	XrActionStateVector2f actionStateVector2f = {XR_TYPE_ACTION_STATE_VECTOR2F};
+	for(size_t i = 0; i < xr_actions_vector2f.size(); i++){
+		getInfo.action = xr_actions_vector2f[i];
+		xr_result = xrGetActionStateVector2f(xr_session, &getInfo, &actionStateVector2f);
+		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStateVector2f"))
+			return false;
+		if(actionStateVector2f.isActive && actionStateVector2f.changedSinceLastSync)
+			std::cout << "ACTION: actionStateVector2f " << xr_action_string_paths_vector2f[i] << " " << actionStateVector2f.currentState.x << " " << actionStateVector2f.currentState.y << std::endl;
+	}
+
+	// pose
+	XrActionStatePose actionStatePose = {XR_TYPE_ACTION_STATE_POSE};
+	for(size_t i = 0; i < xr_actions_pose.size(); i++){
+		getInfo.action = xr_actions_pose[i];
+		xr_result = xrGetActionStatePose(xr_session, &getInfo, &actionStatePose);
+		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStatePose"))
+			return false;
+		if(actionStatePose.isActive)
+			std::cout << "ACTION: actionStatePose " << xr_action_string_paths_pose[i] << std::endl;
+	}
+
 	return true;
 }
 
@@ -1415,12 +1933,12 @@ bool OpenXrApplication::renderViews(){
 	XrFrameWaitInfo frameWaitInfo = {XR_TYPE_FRAME_WAIT_INFO};
 	XrFrameState frameState = {XR_TYPE_FRAME_STATE};
 	xr_result = xrWaitFrame(xr_session, &frameWaitInfo, &frameState);
-	if(!xrCheckResult(NULL, xr_result, "xrWaitFrame"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrWaitFrame"))
 		return false;
 
 	XrFrameBeginInfo frameBeginInfo = {XR_TYPE_FRAME_BEGIN_INFO};
 	xr_result = xrBeginFrame(xr_session, &frameBeginInfo);
-	if(!xrCheckResult(NULL, xr_result, "xrBeginFrame"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrBeginFrame"))
 		return false;
 
 	vector<XrCompositionLayerBaseHeader*> layers;
@@ -1428,14 +1946,14 @@ bool OpenXrApplication::renderViews(){
 	vector<XrCompositionLayerProjectionView> projectionLayerViews;
 
 	if(frameState.shouldRender == XR_TRUE){
-		XrSpaceLocation spaceLocation = {XR_TYPE_SPACE_LOCATION};
-		xr_result = xrLocateSpace(spaceHead, xr_space_local, frameState.predictedDisplayTime, &spaceLocation);
-		if(!xrCheckResult(NULL, xr_result, "xrLocateSpace"))
-			return false;
+		// XrSpaceLocation spaceLocation = {XR_TYPE_SPACE_LOCATION};
+		// xr_result = xrLocateSpace(spaceHead, xr_space_local, frameState.predictedDisplayTime, &spaceLocation);
+		// if(!xrCheckResult(xr_instance, xr_result, "xrLocateSpace"))
+		// 	return false;
 
-		XrSpaceLocationFlags flags = spaceLocation.locationFlags;
-		if((flags & XR_SPACE_LOCATION_POSITION_VALID_BIT) && (flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
-			std::cout << "pose: " << spaceLocation.pose.position.x << "\t" << spaceLocation.pose.position.y << "\t" << spaceLocation.pose.position.z << std::endl;
+		// XrSpaceLocationFlags flags = spaceLocation.locationFlags;
+		// if((flags & XR_SPACE_LOCATION_POSITION_VALID_BIT) && (flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
+		// 	std::cout << "pose: " << spaceLocation.pose.position.x << "\t" << spaceLocation.pose.position.y << "\t" << spaceLocation.pose.position.z << std::endl;
 		
 		vector<XrView> views(viewConfigurationViews.size(), {XR_TYPE_VIEW});
 
@@ -1449,7 +1967,7 @@ bool OpenXrApplication::renderViews(){
 		viewLocateInfo.space = xr_space_local;
 
 		xr_result = xrLocateViews(xr_session, &viewLocateInfo, &viewState, viewCapacityInput, &viewCountOutput, views.data());
-		if(!xrCheckResult(NULL, xr_result, "xrLocateViews"))
+		if(!xrCheckResult(xr_instance, xr_result, "xrLocateViews"))
 			return false;
 		if ((viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) == 0 || (viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) == 0)
 			return false;  // there is no valid tracking poses for the views
@@ -1471,14 +1989,14 @@ bool OpenXrApplication::renderViews(){
 
 			uint32_t swapchainImageIndex;
 			xr_result = xrAcquireSwapchainImage(viewSwapchain.handle, &acquireInfo, &swapchainImageIndex);
-			if(!xrCheckResult(NULL, xr_result, "xrAcquireSwapchainImage"))
+			if(!xrCheckResult(xr_instance, xr_result, "xrAcquireSwapchainImage"))
 				return false;
 			xr_graphics_handler.acquireContext(xr_graphics_binding, "xrAcquireSwapchainImage");
 
 			XrSwapchainImageWaitInfo waitInfo = {XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
 			waitInfo.timeout = XR_INFINITE_DURATION;
 			xr_result = xrWaitSwapchainImage(viewSwapchain.handle, &waitInfo);
-			if(!xrCheckResult(NULL, xr_result, "xrWaitSwapchainImage"))
+			if(!xrCheckResult(xr_instance, xr_result, "xrWaitSwapchainImage"))
 				return false;
 			xr_graphics_handler.acquireContext(xr_graphics_binding, "xrWaitSwapchainImage");
 
@@ -1500,7 +2018,7 @@ bool OpenXrApplication::renderViews(){
 
 			XrSwapchainImageReleaseInfo releaseInfo{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
 			xr_result = xrReleaseSwapchainImage(viewSwapchain.handle, &releaseInfo);
-			if(!xrCheckResult(NULL, xr_result, "xrReleaseSwapchainImage"))
+			if(!xrCheckResult(xr_instance, xr_result, "xrReleaseSwapchainImage"))
 				return false;
 		}
 
@@ -1519,7 +2037,7 @@ bool OpenXrApplication::renderViews(){
 	frameEndInfo.layers = layers.data();
 
 	xr_result = xrEndFrame(xr_session, &frameEndInfo);
-	if(!xrCheckResult(NULL, xr_result, "xrEndFrame"))
+	if(!xrCheckResult(xr_instance, xr_result, "xrEndFrame"))
 		return false;
 
 	return true;
@@ -1611,6 +2129,8 @@ extern "C"
 		return app->getSystem(XrFormFactor(formFactor), XrEnvironmentBlendMode(blendMode), XrViewConfigurationType(configurationType)); 
 	}
     bool createActionSet(OpenXrApplication * app){ return app->createActionSet(); }
+	bool addAction(OpenXrApplication * app, const char * stringPath, int actionType){ return app->addAction(stringPath, XrActionType(actionType)); }
+
     bool createSession(OpenXrApplication * app){ return app->createSession(); }
 
     bool pollEvents(OpenXrApplication * app, bool * exitLoop){ return app->pollEvents(exitLoop); }
@@ -1640,6 +2160,5 @@ extern "C"
 			views[i] = viewConfigurationView[i];
 		return true;
 	}
-
 }
 #endif
