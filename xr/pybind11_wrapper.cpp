@@ -85,6 +85,10 @@ PYBIND11_MODULE(xrlib_p, m){
             })
         .def("createActionSet", &OpenXrApplication::createActionSet)
         .def("createSession", &OpenXrApplication::createSession)
+        // actions
+        .def("addAction", [](OpenXrApplication &m, string stringPath, int actionType){
+                return m.addAction(stringPath, XrActionType(actionType));
+            })
         // poll data
         .def("pollEvents", [](OpenXrApplication &m){
                 bool exitLoop = true;
