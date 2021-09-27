@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
+#include <algorithm>
 #include <functional> 
 using namespace std;
 
@@ -58,6 +59,16 @@ MAKE_TO_STRING_FUNC(XrSessionState);
 MAKE_TO_STRING_FUNC(XrResult);
 MAKE_TO_STRING_FUNC(XrFormFactor);
 
+
+struct ActionState{
+  	XrActionType type;
+	const char * path;
+	bool isActive;
+    bool stateBool;
+    float stateFloat;
+    float stateVectorX;
+    float stateVectorY;
+};
 
 struct SwapchainHandler{
   	XrSwapchain handle;
@@ -772,7 +783,7 @@ public:
 	bool createActionSet();
 
 	bool pollEvents(bool *);
-	bool pollActions();
+	bool pollActions(vector<ActionState> &);
 	bool renderViews();
 
 	bool setFrameByIndex(int, int, int, void *, bool);
@@ -1865,8 +1876,7 @@ bool OpenXrApplication::pollEvents(bool * exitLoop){
 	return true;
 }
 
-bool OpenXrApplication::pollActions(){
-	// TODO: implement
+bool OpenXrApplication::pollActions(vector<ActionState> & actionStates){
 	// sync actions
 	XrActiveActionSet activeActionSet = {xr_action_set, XR_NULL_PATH};
 	XrActionsSyncInfo syncInfo = {XR_TYPE_ACTIONS_SYNC_INFO};
@@ -1887,8 +1897,15 @@ bool OpenXrApplication::pollActions(){
 		xr_result = xrGetActionStateBoolean(xr_session, &getInfo, &actionStateBoolean);
 		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStateBoolean"))
 			return false;
-		if(actionStateBoolean.isActive && actionStateBoolean.changedSinceLastSync)
-			std::cout << "ACTION: actionStateBoolean " << xr_action_string_paths_boolean[i] << " " << actionStateBoolean.currentState << std::endl;
+		if(actionStateBoolean.isActive && actionStateBoolean.changedSinceLastSync){
+			ActionState state;
+			state.type = XR_ACTION_TYPE_BOOLEAN_INPUT;
+			state.path = xr_action_string_paths_boolean[i].c_str();
+			state.isActive = actionStateBoolean.isActive;
+			state.stateBool = (bool)actionStateBoolean.currentState;
+			actionStates.push_back(state);
+			// std::cout << "ACTION: actionStateBoolean " << xr_action_string_paths_boolean[i] << " " << actionStateBoolean.currentState << std::endl;
+		}
 	}
 
 	// float
@@ -1898,8 +1915,15 @@ bool OpenXrApplication::pollActions(){
 		xr_result = xrGetActionStateFloat(xr_session, &getInfo, &actionStateFloat);
 		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStateFloat"))
 			return false;
-		if(actionStateFloat.isActive && actionStateFloat.changedSinceLastSync)
-			std::cout << "ACTION: actionStateFloat " << xr_action_string_paths_float[i] << " " << actionStateFloat.currentState << std::endl;
+		if(actionStateFloat.isActive && actionStateFloat.changedSinceLastSync){
+			ActionState state;
+			state.type = XR_ACTION_TYPE_FLOAT_INPUT;
+			state.path = xr_action_string_paths_float[i].c_str();
+			state.isActive = actionStateFloat.isActive;
+			state.stateFloat = actionStateFloat.currentState;
+			actionStates.push_back(state);
+			// std::cout << "ACTION: actionStateFloat " << xr_action_string_paths_float[i] << " " << actionStateFloat.currentState << std::endl;
+		}
 	}
 
 	// vector2f
@@ -1909,8 +1933,16 @@ bool OpenXrApplication::pollActions(){
 		xr_result = xrGetActionStateVector2f(xr_session, &getInfo, &actionStateVector2f);
 		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStateVector2f"))
 			return false;
-		if(actionStateVector2f.isActive && actionStateVector2f.changedSinceLastSync)
-			std::cout << "ACTION: actionStateVector2f " << xr_action_string_paths_vector2f[i] << " " << actionStateVector2f.currentState.x << " " << actionStateVector2f.currentState.y << std::endl;
+		if(actionStateVector2f.isActive && actionStateVector2f.changedSinceLastSync){
+			ActionState state;
+			state.type = XR_ACTION_TYPE_VECTOR2F_INPUT;
+			state.path = xr_action_string_paths_vector2f[i].c_str();
+			state.isActive = actionStateVector2f.isActive;
+			state.stateVectorX = actionStateVector2f.currentState.x;
+			state.stateVectorY = actionStateVector2f.currentState.y;
+			actionStates.push_back(state);
+			// std::cout << "ACTION: actionStateVector2f " << xr_action_string_paths_vector2f[i] << " " << actionStateVector2f.currentState.x << " " << actionStateVector2f.currentState.y << std::endl;
+		}
 	}
 
 	// pose
@@ -1920,8 +1952,14 @@ bool OpenXrApplication::pollActions(){
 		xr_result = xrGetActionStatePose(xr_session, &getInfo, &actionStatePose);
 		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStatePose"))
 			return false;
-		if(actionStatePose.isActive)
-			std::cout << "ACTION: actionStatePose " << xr_action_string_paths_pose[i] << std::endl;
+		if(actionStatePose.isActive){
+			ActionState state;
+			state.type = XR_ACTION_TYPE_POSE_INPUT;
+			state.path = xr_action_string_paths_pose[i].c_str();
+			state.isActive = actionStatePose.isActive;
+			actionStates.push_back(state);
+			// std::cout << "ACTION: actionStatePose " << xr_action_string_paths_pose[i] << std::endl;
+		}
 	}
 
 	return true;
@@ -2098,7 +2136,8 @@ int main(){
 			break;
 
 		if(app->isSessionRunning()){
-			app->pollActions();
+			vector<ActionState> requestedActionStates;
+			app->pollActions(requestedActionStates);
 			// app->renderFrame();
 		}
 		else{
@@ -2136,7 +2175,14 @@ extern "C"
     bool pollEvents(OpenXrApplication * app, bool * exitLoop){ return app->pollEvents(exitLoop); }
     bool isSessionRunning(OpenXrApplication * app){ return app->isSessionRunning(); }
 
-    bool pollActions(OpenXrApplication * app){ return app->pollActions(); }
+    bool pollActions(OpenXrApplication * app, ActionState * actionStates, int actionStatesLength){
+		vector<ActionState> requestedActionStates;
+		bool status = app->pollActions(requestedActionStates);
+		if(requestedActionStates.size() <= actionStatesLength)
+			for(size_t i = 0; i < requestedActionStates.size(); i++)
+				actionStates[i] = requestedActionStates[i];
+		return status;
+	}
     bool renderViews(OpenXrApplication * app){ return app->renderViews(); }
 
 	bool setFrames(OpenXrApplication * app, int leftWidth, int leftHeight, void * leftData, int rightWidth, int rightHeight, void * rightData, bool rgba){
