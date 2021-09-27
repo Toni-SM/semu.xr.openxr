@@ -15,7 +15,7 @@ namespace pybind11 { namespace detail {
         public:
             PYBIND11_TYPE_CASTER(XrView, _("XrView"));
 
-            // conversion from C++ to Python)
+            // conversion from C++ to Python
             static handle cast(XrView src, return_value_policy /* policy */, handle /* parent */){
                 
                 PyObject * fov = PyDict_New();
@@ -53,7 +53,7 @@ namespace pybind11 { namespace detail {
         public:
             PYBIND11_TYPE_CASTER(XrViewConfigurationView, _("XrViewConfigurationView"));
 
-            // conversion from C++ to Python)
+            // conversion from C++ to Python
             static handle cast(XrViewConfigurationView src, return_value_policy /* policy */, handle /* parent */){
                 
                 PyObject * configurationView = PyDict_New();
@@ -67,6 +67,26 @@ namespace pybind11 { namespace detail {
                 PyDict_SetItemString(configurationView, "maxSwapchainSampleCount", PyLong_FromLong(src.maxSwapchainSampleCount));
 
                 return configurationView;
+            }
+    };
+
+    template <> struct type_caster<ActionState>{
+        public:
+            PYBIND11_TYPE_CASTER(ActionState, _("ActionState"));
+
+            // conversion from C++ to Python
+            static handle cast(ActionState src, return_value_policy /* policy */, handle /* parent */){
+                
+                PyObject * state = PyDict_New();
+                PyDict_SetItemString(state, "type", PyLong_FromLong(src.type));
+                PyDict_SetItemString(state, "path", PyUnicode_FromString(src.path));
+                PyDict_SetItemString(state, "isActive", PyBool_FromLong(src.isActive));
+                PyDict_SetItemString(state, "stateBool", PyBool_FromLong(src.stateBool));
+                PyDict_SetItemString(state, "stateFloat", PyFloat_FromDouble(src.stateFloat));
+                PyDict_SetItemString(state, "stateVectorX", PyFloat_FromDouble(src.stateVectorX));
+                PyDict_SetItemString(state, "stateVectorY", PyFloat_FromDouble(src.stateVectorY));
+
+                return state;
             }
     };
 }}
@@ -95,7 +115,11 @@ PYBIND11_MODULE(xrlib_p, m){
                 bool returnValue = m.pollEvents(&exitLoop); 
                 return std::make_tuple(returnValue, exitLoop); 
             })
-        .def("pollActions", &OpenXrApplication::pollActions)
+        .def("pollActions", [](OpenXrApplication &m){
+                vector<ActionState> actionStates;
+                bool returnValue = m.pollActions(actionStates);
+                return std::make_tuple(returnValue, actionStates); 
+            })
         // render
         .def("renderViews", &OpenXrApplication::renderViews)
         // render utilities
