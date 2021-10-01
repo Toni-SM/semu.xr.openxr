@@ -780,7 +780,6 @@ public:
 
 	bool addAction(string, XrActionType);
 	bool suggestInteractionProfileBindings();
-	bool createActionSet();
 
 	bool pollEvents(bool *);
 	bool pollActions(vector<ActionState> &);
@@ -1247,6 +1246,16 @@ bool OpenXrApplication::getSystem(XrFormFactor formFactor, XrEnvironmentBlendMod
 		return false;
  	if(!acquireBlendModes(blendMode))
 	 	return false;
+
+	// create action set
+	XrActionSetCreateInfo actionSetInfo = {XR_TYPE_ACTION_SET_CREATE_INFO};
+	strcpy(actionSetInfo.actionSetName, "actionset");
+	strcpy(actionSetInfo.localizedActionSetName, "localized_actionset");
+	actionSetInfo.priority = 0;
+
+	xr_result = xrCreateActionSet(xr_instance, &actionSetInfo, &xr_action_set);
+	if(!xrCheckResult(xr_instance, xr_result, "xrCreateActionSet"))
+		return false;
 	return true;
 }
 
@@ -1306,19 +1315,6 @@ bool OpenXrApplication::addAction(string stringPath, XrActionType actionType){
 		xr_action_paths_vibration.push_back(path); 
 		xr_action_string_paths_vibration.push_back(stringPath); 
 	}
-	return true;
-}
-
-bool OpenXrApplication::createActionSet(){
-	// TODO: use an action handler
-	XrActionSetCreateInfo actionSetInfo = {XR_TYPE_ACTION_SET_CREATE_INFO};
-	strcpy(actionSetInfo.actionSetName, "actionset");
-	strcpy(actionSetInfo.localizedActionSetName, "ActionSet");
-	actionSetInfo.priority = 0;
-
-	xr_result = xrCreateActionSet(xr_instance, &actionSetInfo, &xr_action_set);
-	if(!xrCheckResult(xr_instance, xr_result, "xrCreateActionSet"))
-		return false;
 	return true;
 }
 
@@ -2115,7 +2111,6 @@ int main(){
 	app->createInstance(applicationName, engineName, requestedApiLayers, requestedExtensions);
 	
 	app->getSystem(XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, XR_ENVIRONMENT_BLEND_MODE_OPAQUE, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO);
-	app->createActionSet();
 	app->createSession();
 
 	bool exitRenderLoop = false;
@@ -2167,7 +2162,6 @@ extern "C"
     bool getSystem(OpenXrApplication * app, int formFactor, int blendMode, int configurationType){ 
 		return app->getSystem(XrFormFactor(formFactor), XrEnvironmentBlendMode(blendMode), XrViewConfigurationType(configurationType)); 
 	}
-    bool createActionSet(OpenXrApplication * app){ return app->createActionSet(); }
 	bool addAction(OpenXrApplication * app, const char * stringPath, int actionType){ return app->addAction(stringPath, XrActionType(actionType)); }
 
     bool createSession(OpenXrApplication * app){ return app->createSession(); }

@@ -103,7 +103,6 @@ PYBIND11_MODULE(xrlib_p, m){
         .def("getSystem", [](OpenXrApplication &m, int formFactor, int blendMode, int configurationType){
                 return m.getSystem(XrFormFactor(formFactor), XrEnvironmentBlendMode(blendMode), XrViewConfigurationType(configurationType));
             })
-        .def("createActionSet", &OpenXrApplication::createActionSet)
         .def("createSession", &OpenXrApplication::createSession)
         // actions
         .def("addAction", [](OpenXrApplication &m, string stringPath, int actionType){
