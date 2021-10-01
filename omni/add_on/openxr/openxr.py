@@ -7,20 +7,33 @@ import ctypes
 import cv2
 import numpy as np
 
-import pxr
-import omni
-from pxr import UsdGeom, Gf, Usd
-from omni.syntheticdata import sensors
+if __name__ != "__main__":
+    import pxr
+    import omni
+    from pxr import UsdGeom, Gf, Usd
+    from omni.syntheticdata import sensors
+else:
+    class pxr:
+        class Gf:
+            Vec3d = None
+            Quatd = lambda w,x,y,z: None
+        class Usd:
+            Prim = None
+        class UsdGeom:
+            pass
+        class Sdf:
+            Path = None
+    Gf = pxr.Gf
 
-
-def acquire_openxr_interface(use_ctypes: bool = False, graphics: str = "OpenGL"):
-    return OpenXR(use_ctypes=use_ctypes, graphics=graphics)
+def acquire_openxr_interface():
+    return OpenXR()
 
 def release_openxr_interface(xr):
     print("TODO: _openxr.release_openxr_interface")
     pass
 
 
+XrActionType = ctypes.c_int
 XrStructureType = ctypes.c_int
 
 class XrQuaternionf(ctypes.Structure):
@@ -44,13 +57,23 @@ class XrViewConfigurationView(ctypes.Structure):
                 ('recommendedImageRectHeight', ctypes.c_uint32), ('maxImageRectHeight', ctypes.c_uint32), 
                 ('recommendedSwapchainSampleCount', ctypes.c_uint32), ('maxSwapchainSampleCount', ctypes.c_uint32)]
 
+class ActionState(ctypes.Structure):
+    _fields_ = [('type', XrActionType),
+                ('path', ctypes.c_char_p),
+                ('isActive', ctypes.c_bool),
+                ('stateBool', ctypes.c_bool), 
+                ('stateFloat', ctypes.c_float), 
+                ('stateVectorX', ctypes.c_float), 
+                ('stateVectorY', ctypes.c_float)]
+
 
 class OpenXR:
-    def __init__(self, use_ctypes=False, graphics="OpenGL") -> None:
+    def __init__(self) -> None:
         self._lib = None
         self._app = None
 
-        self._use_ctypes = use_ctypes
+        self._graphics = None
+        self._use_ctypes = False
         
         # views
         self._prim_left = None
@@ -62,12 +85,13 @@ class OpenXR:
         self._rectification_quat_left = Gf.Quatd(1, 0, 0, 0)
         self._rectification_quat_right = Gf.Quatd(1, 0, 0, 0)
 
-        self._viewport_interface = omni.kit.viewport.get_viewport_interface()
+        self._viewport_interface = None
 
         self._transform_fit = None
         self._transform_flip = None
 
         # callbacks
+        self._callback_action_event = {}
         self._callback_render_event = None
 
         # constants
@@ -87,6 +111,17 @@ class OpenXR:
         self.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO = 1
         self.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO = 2
 
+        self.XR_ACTION_TYPE_BOOLEAN_INPUT = 1
+        self.XR_ACTION_TYPE_FLOAT_INPUT = 2
+        self.XR_ACTION_TYPE_VECTOR2F_INPUT = 3
+        self.XR_ACTION_TYPE_POSE_INPUT = 4
+        self.XR_ACTION_TYPE_VIBRATION_OUTPUT = 100
+
+    def init(self, graphics: str = "OpenGL", use_ctypes: bool = False) -> bool:
+        """
+        Init OpenXR by loading the compiled library
+        """
+        self._use_ctypes = use_ctypes
         # graphics API
         if graphics in ["OpenGL", self.XR_KHR_OPENGL_ENABLE_EXTENSION_NAME]:
             self._graphics = self.XR_KHR_OPENGL_ENABLE_EXTENSION_NAME
@@ -104,11 +139,7 @@ class OpenXR:
             raise NotImplementedError("D3D12 graphics API is not implemented yet")
         else:
             raise ValueError("Invalid graphics API ({}). Valid graphics APIs are OpenGL, OpenGLES, Vulkan, D3D11, D3D12".format(graphics))
-        
-    def init(self) -> bool:
-        """
-        Init OpenXR by loading the compiled library
-        """
+
         # TODO: catch exceptions
         if __name__ == "__main__":
             extension_path = os.getcwd()[:os.getcwd().find("/omni/add_on/openxr")]
@@ -138,6 +169,8 @@ class OpenXR:
             self._lib = xrlib_p
             self._app = xrlib_p.OpenXrApplication()
             print("OpenXR.init", xrlib_p)
+        
+        # self._viewport_interface = omni.kit.viewport.get_viewport_interface()
         return True
 
     def is_session_running(self) -> bool:
@@ -191,12 +224,6 @@ class OpenXR:
         else:
             return self._app.getSystem(form_factor, blend_mode, view_configuration_type)
 
-    def create_action_set(self) -> bool:
-        if self._use_ctypes:
-            return bool(self._lib.createActionSet(self._app))
-        else:
-            return self._app.createActionSet()
-
     def create_session(self) -> bool:
         if self._use_ctypes:
             return bool(self._lib.createSession(self._app))
@@ -214,9 +241,42 @@ class OpenXR:
 
     def poll_actions(self) -> bool:
         if self._use_ctypes:
-            return bool(self._lib.pollActions(self._app))
+            requested_action_states = (ActionState * len(self._callback_action_event.keys()))()
+            result = bool(self._lib.pollActions(self._app, requested_action_states, len(requested_action_states)))
+
+            for state in requested_action_states:
+                value = None
+                if not state.type:
+                    break
+                elif state.type == self.XR_ACTION_TYPE_BOOLEAN_INPUT:
+                    value = state.stateBool
+                elif state.type == self.XR_ACTION_TYPE_FLOAT_INPUT:
+                    value = state.stateFloat
+                elif state.type == self.XR_ACTION_TYPE_VECTOR2F_INPUT:
+                    value = (state.stateVectorX, state.stateVectorY)
+                elif state.type == self.XR_ACTION_TYPE_POSE_INPUT:
+                    pass
+                elif state.type == self.XR_ACTION_TYPE_VIBRATION_OUTPUT:
+                    pass
+                self._callback_action_event[state.path.decode("utf-8")](state.path.decode("utf-8"), value)
+            return result
+        
         else:
-            return self._app.pollActions()
+            result = self._app.pollActions()
+            for state in result[1]:
+                value = None
+                if state["type"] == self.XR_ACTION_TYPE_BOOLEAN_INPUT:
+                    value = state["stateBool"]
+                elif state["type"] == self.XR_ACTION_TYPE_FLOAT_INPUT:
+                    value = state["stateFloat"]
+                elif state["type"] == self.XR_ACTION_TYPE_VECTOR2F_INPUT:
+                    value = (state["stateVectorX"], state["stateVectorY"])
+                elif state["type"] == self.XR_ACTION_TYPE_POSE_INPUT:
+                    pass
+                elif state["type"] == self.XR_ACTION_TYPE_VIBRATION_OUTPUT:
+                    pass
+                self._callback_action_event[state["path"]](state["path"], value)
+            return result[0]
 
     def render_views(self) -> bool:
         if self._callback_render_event is None:
@@ -226,6 +286,33 @@ class OpenXR:
             return bool(self._lib.renderViews(self._app))
         else:
             return self._app.renderViews()
+
+    # action utilities
+
+    def subscribe_action_event(self, binding: str, action_type: Union[int, None] = None, callback=None) -> bool:
+        if action_type is None:
+            print(binding.split("/")[-1])
+            if binding.split("/")[-1] in ["click", "touch"]:
+                action_type = self.XR_ACTION_TYPE_BOOLEAN_INPUT
+            elif binding.split("/")[-1] in ["value", "force"]:
+                action_type = self.XR_ACTION_TYPE_FLOAT_INPUT
+            elif binding.split("/")[-1] in ["x", "y"]:
+                action_type = self.XR_ACTION_TYPE_VECTOR2F_INPUT
+            elif binding.split("/")[-1] in ["pose"]:
+                action_type = self.XR_ACTION_TYPE_POSE_INPUT
+            elif binding.split("/")[-1] in ["haptic", "haptic_left", "haptic_right", "haptic_left_trigger", "haptic_right_trigger"]:
+                action_type = self.XR_ACTION_TYPE_VIBRATION_OUTPUT
+            else:
+                raise ValueError("The action type cannot be retrieved from the path {}".format(binding))
+        
+        if callback is None:
+            raise ValueError("The callback was not defined")
+        self._callback_action_event[binding] = callback
+        
+        if self._use_ctypes:
+            return bool(self._lib.addAction(self._app, ctypes.create_string_buffer(binding.encode('utf-8')), action_type))
+        else:
+            return self._app.addAction(binding, action_type)
 
     # view utilities
 
@@ -431,21 +518,28 @@ if __name__ == "__main__":
     parser.add_argument('--ctypes', default=False, action="store_true", help='use ctypes instead of pybind11')
     args = parser.parse_args()
 
-    _xr = acquire_openxr_interface(args.ctypes)
-    _xr.init()
+    _xr = acquire_openxr_interface()
+    _xr.init(use_ctypes=args.ctypes)
 
     ready = False
     end = False
 
+    def callback_action(path, value):
+        print(path, value)
+
     if _xr.create_instance():
         if _xr.get_system():
-            if _xr.create_action_set():
-                if _xr.create_session():
-                    ready = True
-                else:
-                    print("[ERROR]:", "createSession")
+            _xr.subscribe_action_event("/user/head/input/volume_up/click", callback=callback_action)
+            _xr.subscribe_action_event("/user/head/input/volume_down/click", callback=callback_action)
+            _xr.subscribe_action_event("/user/head/input/mute_mic/click", callback=callback_action)
+            _xr.subscribe_action_event("/user/hand/left/input/trigger/value", callback=callback_action)
+            _xr.subscribe_action_event("/user/hand/right/input/trigger/value", callback=callback_action)
+            _xr.subscribe_action_event("/user/hand/left/input/menu/click", callback=callback_action)
+            _xr.subscribe_action_event("/user/hand/right/input/menu/click", callback=callback_action)
+            if _xr.create_session():
+                ready = True
             else:
-                print("[ERROR]:", "createActionSet")
+                print("[ERROR]:", "createSession")
         else:
             print("[ERROR]:", "getSystem")
     else:
@@ -455,35 +549,37 @@ if __name__ == "__main__":
         cap = cv2.VideoCapture("/home/argus/Videos/xr/xr/sample.mp4")
 
         def callback_render(num_views, views, configuration_views):
-            global end
-            ret, frame = cap.read()
-            if ret:
-                if num_views == 2:
-                    frame1 = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    _xr.set_frames(configuration_views, frame, frame1)
+            pass
+            # global end
+            # ret, frame = cap.read()
+            # if ret:
+            #     if num_views == 2:
+            #         frame1 = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            #         _xr.set_frames(configuration_views, frame, frame1)
 
-                    # show frame
-                    k = 0.25
-                    frame = cv2.resize(np.hstack((frame, frame1)), (int(2*k*frame.shape[1]), int(k*frame.shape[0])))
-                    cv2.imshow('frame', frame)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        exit()
-            else:
-                end = True
+            #         # show frame
+            #         k = 0.25
+            #         frame = cv2.resize(np.hstack((frame, frame1)), (int(2*k*frame.shape[1]), int(k*frame.shape[0])))
+            #         cv2.imshow('frame', frame)
+            #         if cv2.waitKey(1) & 0xFF == ord('q'):
+            #             exit()
+            # else:
+            #     end = True
 
         _xr.subscribe_render_event(callback_render)
 
-        while(cap.isOpened() or not end):
+        # while(cap.isOpened() or not end):
+        for i in range(10000000):
             if _xr.poll_events():
                 if _xr.is_session_running():
                     if not _xr.poll_actions():
                         print("[ERROR]:", "pollActions")
                         break
-                    # _xr._init_callbacks()
                     if not _xr.render_views():
                         print("[ERROR]:", "renderViews")
                         break
                 else:
+                    print("wait for is_session_running()")
                     time.sleep(0.1)
             else:
                 break
