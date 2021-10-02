@@ -785,6 +785,8 @@ public:
 
 	bool addAction(string, XrActionType);
 	bool suggestInteractionProfileBindings();
+	bool applyHapticFeedback(string, XrHapticBaseHeader *);
+	bool stopHapticFeedback(string);
 
 	bool pollEvents(bool *);
 	bool pollActions(vector<ActionState> &);
@@ -1322,6 +1324,34 @@ bool OpenXrApplication::addAction(string stringPath, XrActionType actionType){
 		xr_action_string_paths_vibration.push_back(stringPath); 
 	}
 	return true;
+}
+
+bool OpenXrApplication::applyHapticFeedback(string stringPath, XrHapticBaseHeader * hapticFeedback){
+	for(size_t i = 0; i < xr_actions_vibration.size(); i++)
+		if(!xr_action_string_paths_vibration[i].compare(stringPath)){
+			XrHapticActionInfo hapticActionInfo = {XR_TYPE_HAPTIC_ACTION_INFO};
+			hapticActionInfo.action = xr_actions_vibration[i];
+			hapticActionInfo.subactionPath = XR_NULL_PATH;
+			xr_result = xrApplyHapticFeedback(xr_session, &hapticActionInfo, hapticFeedback);
+			if(!xrCheckResult(xr_instance, xr_result, "xrApplyHapticFeedback"))
+				return false;
+			return true;
+		}
+	return false;
+}
+
+bool OpenXrApplication::stopHapticFeedback(string stringPath){
+	for(size_t i = 0; i < xr_actions_vibration.size(); i++)
+		if(!xr_action_string_paths_vibration[i].compare(stringPath)){
+			XrHapticActionInfo hapticActionInfo = {XR_TYPE_HAPTIC_ACTION_INFO};
+			hapticActionInfo.action = xr_actions_vibration[i];
+			hapticActionInfo.subactionPath = XR_NULL_PATH;
+			xr_result = xrStopHapticFeedback(xr_session, &hapticActionInfo);
+			if(!xrCheckResult(xr_instance, xr_result, "xrStopHapticFeedback"))
+				return false;
+			return true;
+		}
+	return false;
 }
 
 void OpenXrApplication::defineInteractionProfileBindings(vector<XrActionSuggestedBinding> & bindings, vector<string> validPaths){
@@ -1953,7 +1983,6 @@ bool OpenXrApplication::pollActions(vector<ActionState> & actionStates){
 			state.path = xr_action_string_paths_pose[i].c_str();
 			state.isActive = actionStatePose.isActive;
 			actionStates.push_back(state);
-			// std::cout << "ACTION: actionStatePose " << xr_action_string_paths_pose[i] << std::endl;
 		}
 	}
 
@@ -2199,6 +2228,16 @@ extern "C"
 		return app->getSystem(XrFormFactor(formFactor), XrEnvironmentBlendMode(blendMode), XrViewConfigurationType(configurationType)); 
 	}
 	bool addAction(OpenXrApplication * app, const char * stringPath, int actionType){ return app->addAction(stringPath, XrActionType(actionType)); }
+
+	bool applyHapticFeedback(OpenXrApplication * app, const char * stringPath, float amplitude, int64_t duration, float frequency){ 
+		XrHapticVibration vibration = {XR_TYPE_HAPTIC_VIBRATION};
+		vibration.amplitude = amplitude;
+		vibration.duration = duration;
+		vibration.frequency = frequency;
+		return app->applyHapticFeedback(stringPath, (XrHapticBaseHeader*)&vibration); 
+	}
+
+	bool stopHapticFeedback(OpenXrApplication * app, const char * stringPath){ return app->stopHapticFeedback(stringPath); }
 
     bool createSession(OpenXrApplication * app){ return app->createSession(); }
 
