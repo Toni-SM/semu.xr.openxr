@@ -141,6 +141,14 @@ PYBIND11_MODULE(xrlib_p, m){
         .def("addAction", [](OpenXrApplication &m, string stringPath, int actionType){
                 return m.addAction(stringPath, XrActionType(actionType));
             })
+        .def("applyHapticFeedback", [](OpenXrApplication &m, string stringPath, float amplitude, int64_t duration, float frequency){
+                XrHapticVibration vibration = {XR_TYPE_HAPTIC_VIBRATION};
+                vibration.amplitude = amplitude;
+                vibration.duration = duration;
+                vibration.frequency = frequency;
+                return m.applyHapticFeedback(stringPath, (XrHapticBaseHeader*)&vibration);
+            })
+        .def("stopHapticFeedback", &OpenXrApplication::stopHapticFeedback)
         // poll data
         .def("pollEvents", [](OpenXrApplication &m){
                 bool exitLoop = true;
