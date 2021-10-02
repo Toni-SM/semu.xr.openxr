@@ -128,6 +128,11 @@ class OpenXR:
         self.XR_ACTION_TYPE_POSE_INPUT = 4
         self.XR_ACTION_TYPE_VIBRATION_OUTPUT = 100
 
+        self.XR_NO_DURATION = 0
+        self.XR_INFINITE_DURATION = 2**32
+        self.XR_MIN_HAPTIC_DURATION = -1
+        self.XR_FREQUENCY_UNSPECIFIED = 0
+
     def init(self, graphics: str = "OpenGL", use_ctypes: bool = False) -> bool:
         """
         Init OpenXR by loading the compiled library
@@ -355,6 +360,18 @@ class OpenXR:
             return bool(self._lib.addAction(self._app, ctypes.create_string_buffer(binding.encode('utf-8')), action_type))
         else:
             return self._app.addAction(binding, action_type)
+
+    def apply_haptic_feedback(self, binding: str, haptic_feedback: dict = {"amplitude": 0.5, "duration": -1, "frequency": 0}):
+        if self._use_ctypes:
+            return bool(self._lib.applyHapticFeedback(self._app, ctypes.create_string_buffer(binding.encode('utf-8')), haptic_feedback["amplitude"], haptic_feedback["duration"], haptic_feedback["frequency"]))
+        else:
+            return self._app.applyHapticFeedback(binding, haptic_feedback["amplitude"], haptic_feedback["duration"], haptic_feedback["frequency"])
+
+    def stop_haptic_feedback(self, binding: str):
+        if self._use_ctypes:
+            return bool(self._lib.stopHapticFeedback(self._app, ctypes.create_string_buffer(binding.encode('utf-8'))))
+        else:
+            return self._app.stopHapticFeedback(binding)
 
     # view utilities
 
