@@ -89,6 +89,39 @@ namespace pybind11 { namespace detail {
                 return state;
             }
     };
+
+    template <> struct type_caster<ActionPoseState>{
+        public:
+            PYBIND11_TYPE_CASTER(ActionPoseState, _("ActionPoseState"));
+
+            // conversion from C++ to Python
+            static handle cast(ActionPoseState src, return_value_policy /* policy */, handle /* parent */){
+                
+                PyObject * state = PyDict_New();
+                PyDict_SetItemString(state, "type", PyLong_FromLong(src.type));
+                PyDict_SetItemString(state, "path", PyUnicode_FromString(src.path));
+                PyDict_SetItemString(state, "isActive", PyBool_FromLong(src.isActive));
+                
+                PyObject * position = PyDict_New();
+                PyDict_SetItemString(position, "x", PyFloat_FromDouble(src.pose.position.x));
+                PyDict_SetItemString(position, "y", PyFloat_FromDouble(src.pose.position.y));
+                PyDict_SetItemString(position, "z", PyFloat_FromDouble(src.pose.position.z));
+
+                PyObject * orientation = PyDict_New();
+                PyDict_SetItemString(orientation, "x", PyFloat_FromDouble(src.pose.orientation.x));
+                PyDict_SetItemString(orientation, "y", PyFloat_FromDouble(src.pose.orientation.y));
+                PyDict_SetItemString(orientation, "z", PyFloat_FromDouble(src.pose.orientation.z));
+                PyDict_SetItemString(orientation, "w", PyFloat_FromDouble(src.pose.orientation.w));
+
+                PyObject * pose = PyDict_New();
+                PyDict_SetItemString(pose, "position", position);
+                PyDict_SetItemString(pose, "orientation", orientation);
+
+                PyDict_SetItemString(state, "pose", pose);
+
+                return state;
+            }
+    };
 }}
 
 
@@ -120,7 +153,11 @@ PYBIND11_MODULE(xrlib_p, m){
                 return std::make_tuple(returnValue, actionStates); 
             })
         // render
-        .def("renderViews", &OpenXrApplication::renderViews)
+        .def("renderViews", [](OpenXrApplication &m, int referenceSpaceType){
+                vector<ActionPoseState> actionPoseState;
+                bool returnValue = m.renderViews(XrReferenceSpaceType(referenceSpaceType), actionPoseState);
+                return std::make_tuple(returnValue, actionPoseState); 
+            })
         // render utilities
         .def("setRenderCallback", &OpenXrApplication::setRenderCallbackFromFunction)
         .def("setFrames", [](OpenXrApplication &m, py::array_t<uint8_t> left, py::array_t<uint8_t> right, bool rgba){
