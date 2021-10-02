@@ -66,6 +66,12 @@ class ActionState(ctypes.Structure):
                 ('stateVectorX', ctypes.c_float), 
                 ('stateVectorY', ctypes.c_float)]
 
+class ActionPoseState(ctypes.Structure):
+    _fields_ = [('type', XrActionType),
+                ('path', ctypes.c_char_p),
+                ('isActive', ctypes.c_bool),
+                ('pose', XrPosef)]
+
 
 class OpenXR:
     def __init__(self) -> None:
@@ -91,7 +97,8 @@ class OpenXR:
         self._transform_flip = None
 
         # callbacks
-        self._callback_action_event = {}
+        self._callback_action_events = {}
+        self._callback_action_pose_events = {}
         self._callback_render_event = None
 
         # constants
@@ -248,28 +255,27 @@ class OpenXR:
 
     def poll_actions(self) -> bool:
         if self._use_ctypes:
-            requested_action_states = (ActionState * len(self._callback_action_event.keys()))()
+            requested_action_states = (ActionState * len(self._callback_action_events.keys()))()
             result = bool(self._lib.pollActions(self._app, requested_action_states, len(requested_action_states)))
 
             for state in requested_action_states:
                 value = None
-                if not state.type:
-                    break
-                elif state.type == self.XR_ACTION_TYPE_BOOLEAN_INPUT:
+                if state.type == self.XR_ACTION_TYPE_BOOLEAN_INPUT:
                     value = state.stateBool
                 elif state.type == self.XR_ACTION_TYPE_FLOAT_INPUT:
                     value = state.stateFloat
                 elif state.type == self.XR_ACTION_TYPE_VECTOR2F_INPUT:
                     value = (state.stateVectorX, state.stateVectorY)
                 elif state.type == self.XR_ACTION_TYPE_POSE_INPUT:
-                    pass
+                    continue
                 elif state.type == self.XR_ACTION_TYPE_VIBRATION_OUTPUT:
-                    pass
-                self._callback_action_event[state.path.decode("utf-8")](state.path.decode("utf-8"), value)
+                    continue
+                self._callback_action_events[state.path.decode("utf-8")](state.path.decode("utf-8"), value)
             return result
         
         else:
             result = self._app.pollActions()
+
             for state in result[1]:
                 value = None
                 if state["type"] == self.XR_ACTION_TYPE_BOOLEAN_INPUT:
@@ -279,20 +285,47 @@ class OpenXR:
                 elif state["type"] == self.XR_ACTION_TYPE_VECTOR2F_INPUT:
                     value = (state["stateVectorX"], state["stateVectorY"])
                 elif state["type"] == self.XR_ACTION_TYPE_POSE_INPUT:
-                    pass
+                    continue
                 elif state["type"] == self.XR_ACTION_TYPE_VIBRATION_OUTPUT:
-                    pass
-                self._callback_action_event[state["path"]](state["path"], value)
+                    continue
+                self._callback_action_events[state["path"]](state["path"], value)
             return result[0]
 
     def render_views(self, reference_space: int = 2) -> bool:
         if self._callback_render_event is None:
             print("[WARNING] No callback has been established for rendering events. Internal callback will be used")
             self.subscribe_render_event()
+
         if self._use_ctypes:
-            return bool(self._lib.renderViews(self._app, reference_space))
+            requested_action_pose_states = (ActionPoseState * len(self._callback_action_pose_events.keys()))()
+            result =  bool(self._lib.renderViews(self._app, reference_space, requested_action_pose_states, len(requested_action_pose_states)))
+
+            for state in requested_action_pose_states:
+                value = None
+                if state.type == self.XR_ACTION_TYPE_POSE_INPUT and state.isActive:
+                    value = ((state.pose.position.x, state.pose.position.y, state.pose.position.z),
+                             (state.pose.orientation.x, state.pose.orientation.y, state.pose.orientation.z, state.pose.orientation.w))
+                    self._callback_action_events[state.path.decode("utf-8")](state.path.decode("utf-8"), value)
+            return result
+
         else:
-            return self._app.renderViews(reference_space)
+            result = self._app.renderViews(reference_space)
+
+            for state in result[1]:
+                value = None
+                if state["type"] == self.XR_ACTION_TYPE_POSE_INPUT and state["isActive"]:
+                    # value = XrPosef()
+                    # value.position.x = state["pose"]["position"]["x"]
+                    # value.position.y = state["pose"]["position"]["y"]
+                    # value.position.z = state["pose"]["position"]["z"]
+                    # value.orientation.x = state["pose"]["orientation"]["x"]
+                    # value.orientation.y = state["pose"]["orientation"]["y"]
+                    # value.orientation.z = state["pose"]["orientation"]["z"]
+                    # value.orientation.w = state["pose"]["orientation"]["w"]
+                    value = ((state["pose"]["position"]["x"], state["pose"]["position"]["y"], state["pose"]["position"]["z"]),
+                             (state["pose"]["orientation"]["x"], state["pose"]["orientation"]["y"], state["pose"]["orientation"]["z"], state["pose"]["orientation"]["w"]))
+                    self._callback_action_events[state["path"]](state["path"], value)
+            return result[0]
 
     # action utilities
 
@@ -314,7 +347,9 @@ class OpenXR:
         
         if callback is None:
             raise ValueError("The callback was not defined")
-        self._callback_action_event[binding] = callback
+        self._callback_action_events[binding] = callback
+        if action_type == self.XR_ACTION_TYPE_POSE_INPUT:
+            self._callback_action_pose_events[binding] = callback
         
         if self._use_ctypes:
             return bool(self._lib.addAction(self._app, ctypes.create_string_buffer(binding.encode('utf-8')), action_type))
