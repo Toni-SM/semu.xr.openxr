@@ -70,6 +70,13 @@ struct ActionState{
     float stateVectorY;
 };
 
+struct ActionPoseState{
+  	XrActionType type;
+	const char * path;
+	bool isActive;
+    XrPosef pose;
+};
+
 struct SwapchainHandler{
   	XrSwapchain handle;
     int32_t width;
@@ -781,7 +788,7 @@ public:
 
 	bool pollEvents(bool *);
 	bool pollActions(vector<ActionState> &);
-	bool renderViews(XrReferenceSpaceType);
+	bool renderViews(XrReferenceSpaceType, vector<ActionPoseState> &);
 
 	bool setFrameByIndex(int, int, int, void *, bool);
 	void setRenderCallbackFromPointer(void (*callback)(int, XrView*, XrViewConfigurationView*)){ renderCallback = callback; };
@@ -1953,7 +1960,7 @@ bool OpenXrApplication::pollActions(vector<ActionState> & actionStates){
 	return true;
 }
 
-bool OpenXrApplication::renderViews(XrReferenceSpaceType referenceSpaceType){
+bool OpenXrApplication::renderViews(XrReferenceSpaceType referenceSpaceType, vector<ActionPoseState> & actionPoseStates){
 	xr_graphics_handler.acquireContext(xr_graphics_binding, "xrWaitFrame");
 
 	XrFrameWaitInfo frameWaitInfo = {XR_TYPE_FRAME_WAIT_INFO};
@@ -1968,18 +1975,21 @@ bool OpenXrApplication::renderViews(XrReferenceSpaceType referenceSpaceType){
 		return false;
 
 	// locate actions
-	// std::cout << std::endl;
 	XrSpaceLocation spaceLocation = {XR_TYPE_SPACE_LOCATION};
 	for(size_t i = 0; i < xr_space_actions_pose.size(); i++){
 		xr_result = xrLocateSpace(xr_space_actions_pose[i], xr_space_view, frameState.predictedDisplayTime, &spaceLocation);
 		if(!xrCheckResult(xr_instance, xr_result, "xrLocateSpace"))
 			return false;
 		
-		// if((spaceLocation.locationFlags & XR_VIEW_STATE_POSITION_VALID_BIT) != 0 || (spaceLocation.locationFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) != 0){
-		// 	std::cout << spaceLocation.pose.position.x << '\t' << spaceLocation.pose.position.y << '\t' << spaceLocation.pose.position.z << std::endl;
-		// }
-		// else
-		// 	std::cout << "Invalid location space" << std::endl;
+		ActionPoseState state;
+		state.type = XR_ACTION_TYPE_POSE_INPUT;
+		state.path = xr_action_string_paths_pose[i].c_str();
+		state.isActive = false;
+		if((spaceLocation.locationFlags & XR_VIEW_STATE_POSITION_VALID_BIT) != 0 || (spaceLocation.locationFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) != 0){
+			state.isActive = true;
+			state.pose = spaceLocation.pose;
+		}
+		actionPoseStates.push_back(state);
 	}
 
 	vector<XrCompositionLayerBaseHeader*> layers;
@@ -1987,10 +1997,6 @@ bool OpenXrApplication::renderViews(XrReferenceSpaceType referenceSpaceType){
 	vector<XrCompositionLayerProjectionView> projectionLayerViews;
 
 	if(frameState.shouldRender == XR_TRUE){
-		// XrSpaceLocationFlags flags = spaceLocation.locationFlags;
-		// if((flags & XR_SPACE_LOCATION_POSITION_VALID_BIT) && (flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
-		// 	std::cout << "pose: " << spaceLocation.pose.position.x << "\t" << spaceLocation.pose.position.y << "\t" << spaceLocation.pose.position.z << std::endl;
-		
 		// locate views
 		vector<XrView> views(xr_view_configuration_views.size(), {XR_TYPE_VIEW});
 
@@ -2120,6 +2126,7 @@ bool OpenXrApplication::setFrameByIndex(int index, int width, int height, void *
 #ifdef APPLICATION
 int main(){
 	OpenXrApplication * app = new OpenXrApplication();
+	vector<ActionPoseState> requestedActionPoseStates;
 
 	// create instance
 	string applicationName = "Omniverse (VR)";
@@ -2162,7 +2169,7 @@ int main(){
 		if(app->isSessionRunning()){
 			vector<ActionState> requestedActionStates;
 			app->pollActions(requestedActionStates);
-			app->renderViews(XR_REFERENCE_SPACE_TYPE_LOCAL);
+			app->renderViews(XR_REFERENCE_SPACE_TYPE_LOCAL, requestedActionPoseStates);
 		}
 		else{
 			// Throttle loop since xrWaitFrame won't be called.
@@ -2206,7 +2213,14 @@ extern "C"
 				actionStates[i] = requestedActionStates[i];
 		return status;
 	}
-    bool renderViews(OpenXrApplication * app, int referenceSpaceType){ return app->renderViews(XrReferenceSpaceType(referenceSpaceType)); }
+    bool renderViews(OpenXrApplication * app, int referenceSpaceType, ActionPoseState * actionPoseStates, int actionPoseStatesLength){ 
+		vector<ActionPoseState> requestedActionPoseStates;
+		bool status = app->renderViews(XrReferenceSpaceType(referenceSpaceType), requestedActionPoseStates);
+		if(requestedActionPoseStates.size() <= actionPoseStatesLength)
+			for(size_t i = 0; i < requestedActionPoseStates.size(); i++)
+				actionPoseStates[i] = requestedActionPoseStates[i];
+		return status;
+	}
 
 	bool setFrames(OpenXrApplication * app, int leftWidth, int leftHeight, void * leftData, int rightWidth, int rightHeight, void * rightData, bool rgba){
 		if(app->getViewConfigurationViewsSize() == 1)
