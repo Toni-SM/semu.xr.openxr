@@ -686,7 +686,6 @@ void OpenGLHandler::renderViewFromImage(const XrCompositionLayerProjectionView &
 
 
 
-// typedef void renderCallback_t(int, XrView*, XrViewConfigurationView*);
 
 class OpenXrApplication{
 private:
@@ -702,6 +701,8 @@ private:
 
 	// actions
 	XrActionSet xr_action_set;
+
+	vector<XrSpace> xr_space_actions_pose;
 
 	vector<XrAction> xr_actions_boolean;
 	vector<XrAction> xr_actions_float;
@@ -721,8 +722,8 @@ private:
 	vector<string> xr_action_string_paths_pose;
 	vector<string> xr_action_string_paths_vibration;
 
-	vector<XrViewConfigurationView> viewConfigurationViews;
-	vector<SwapchainHandler> swapchainsHandlers;
+	vector<SwapchainHandler> xr_swapchains_handlers;
+	vector<XrViewConfigurationView> xr_view_configuration_views;
 
 	bool framesRGBA;
 	vector<int> framesWidth;
@@ -736,9 +737,6 @@ private:
 	// config
 	XrEnvironmentBlendMode environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_MAX_ENUM;
 	XrViewConfigurationType configViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_MAX_ENUM;
-
-	// actions
-	XrSpace spaceHead;
 
 #ifdef XR_USE_GRAPHICS_API_VULKAN
 	XrGraphicsBindingVulkan2KHR xr_graphics_binding = {XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR};
@@ -783,15 +781,15 @@ public:
 
 	bool pollEvents(bool *);
 	bool pollActions(vector<ActionState> &);
-	bool renderViews();
+	bool renderViews(XrReferenceSpaceType);
 
 	bool setFrameByIndex(int, int, int, void *, bool);
 	void setRenderCallbackFromPointer(void (*callback)(int, XrView*, XrViewConfigurationView*)){ renderCallback = callback; };
 	void setRenderCallbackFromFunction(function<void(int, vector<XrView>, vector<XrViewConfigurationView>)> &callback){ renderCallbackFunction = callback; };
 
 	bool isSessionRunning(){ return flagSessionRunning; }
-	int getViewConfigurationViewsSize(){ return viewConfigurationViews.size(); }
-	vector<XrViewConfigurationView> getViewConfigurationViews(){ return viewConfigurationViews; }
+	int getViewConfigurationViewsSize(){ return xr_view_configuration_views.size(); }
+	vector<XrViewConfigurationView> getViewConfigurationViews(){ return xr_view_configuration_views; }
 };
 
 OpenXrApplication::OpenXrApplication(){
@@ -804,6 +802,9 @@ OpenXrApplication::~OpenXrApplication(){
 		xrDestroySpace(xr_space_view);
 		xrDestroySpace(xr_space_local);
 		xrDestroySpace(xr_space_stage);
+
+		for(size_t i = 0; i < xr_space_actions_pose.size(); i++)
+			xrDestroySpace(xr_space_actions_pose[i]);
 
 		xrDestroySession(xr_session);
 		xrDestroyInstance(xr_instance);
@@ -982,24 +983,24 @@ bool OpenXrApplication::acquireViewConfiguration(XrViewConfigurationType configu
 	xr_result = xrEnumerateViewConfigurationViews(xr_instance, xr_system_id, configViewConfigurationType, 0, &propertyCountOutput, nullptr);
 	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateViewConfigurationViews"))
 		return false;
-	viewConfigurationViews.resize(propertyCountOutput, {XR_TYPE_VIEW_CONFIGURATION_VIEW});
-	xr_result = xrEnumerateViewConfigurationViews(xr_instance, xr_system_id, configViewConfigurationType, propertyCountOutput, &propertyCountOutput, viewConfigurationViews.data());
+	xr_view_configuration_views.resize(propertyCountOutput, {XR_TYPE_VIEW_CONFIGURATION_VIEW});
+	xr_result = xrEnumerateViewConfigurationViews(xr_instance, xr_system_id, configViewConfigurationType, propertyCountOutput, &propertyCountOutput, xr_view_configuration_views.data());
 	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateViewConfigurationViews"))
 		return false;
 	
-	std::cout << "View configuration views (" << viewConfigurationViews.size() << ")" << std::endl;
-	for(size_t i = 0; i < viewConfigurationViews.size(); i++){
+	std::cout << "View configuration views (" << xr_view_configuration_views.size() << ")" << std::endl;
+	for(size_t i = 0; i < xr_view_configuration_views.size(); i++){
 		std::cout << "  |-- view " << i << std::endl;
-		std::cout << "  |     |-- recommended resolution: " << viewConfigurationViews[i].recommendedImageRectWidth << " x " << viewConfigurationViews[i].recommendedImageRectHeight << std::endl;
-		std::cout << "  |     |-- max resolution: " << viewConfigurationViews[i].maxImageRectWidth << " x " << viewConfigurationViews[i].maxImageRectHeight << std::endl;
-		std::cout << "  |     |-- recommended swapchain samples: " << viewConfigurationViews[i].recommendedSwapchainSampleCount << std::endl;
-		std::cout << "  |     |-- max swapchain samples: " << viewConfigurationViews[i].maxSwapchainSampleCount << std::endl;
+		std::cout << "  |     |-- recommended resolution: " << xr_view_configuration_views[i].recommendedImageRectWidth << " x " << xr_view_configuration_views[i].recommendedImageRectHeight << std::endl;
+		std::cout << "  |     |-- max resolution: " << xr_view_configuration_views[i].maxImageRectWidth << " x " << xr_view_configuration_views[i].maxImageRectHeight << std::endl;
+		std::cout << "  |     |-- recommended swapchain samples: " << xr_view_configuration_views[i].recommendedSwapchainSampleCount << std::endl;
+		std::cout << "  |     |-- max swapchain samples: " << xr_view_configuration_views[i].maxSwapchainSampleCount << std::endl;
 	}
 
 	// resize frame buffers
-	framesData.resize(viewConfigurationViews.size());
-	framesWidth.resize(viewConfigurationViews.size());
-	framesHeight.resize(viewConfigurationViews.size());
+	framesData.resize(xr_view_configuration_views.size());
+	framesWidth.resize(xr_view_configuration_views.size());
+	framesHeight.resize(xr_view_configuration_views.size());
 	cleanFrames();
 
 	return true;
@@ -1087,20 +1088,18 @@ bool OpenXrApplication::defineSessionSpaces(){
 	if(!xrCheckResult(xr_instance, xr_result, "xrAttachSessionActionSets"))
 		return false;
 
-	// // TODO: delete 
-	// XrInteractionProfileState interactionProfileState;
-	// xr_result = xrGetCurrentInteractionProfile(xr_session, XR_NULL_PATH, &interactionProfileState);
-	// if(!xrCheckResult(xr_instance, xr_result, "xrGetCurrentInteractionProfile"))
-	// 	return false;
-	// std::cout << "XrInteractionProfileState " << interactionProfileState.interactionProfile << std::endl;
+	XrActionSpaceCreateInfo actionSpaceInfo = {XR_TYPE_ACTION_SPACE_CREATE_INFO};
+	actionSpaceInfo.poseInActionSpace.orientation.w = 1.f;
+	actionSpaceInfo.subactionPath = XR_NULL_PATH;
 
-	// XrActionSpaceCreateInfo actionSpaceInfo = {XR_TYPE_ACTION_SPACE_CREATE_INFO};
-	// actionSpaceInfo.action = actionTestHead;
-	// actionSpaceInfo.poseInActionSpace.orientation.w = 1.f;
-	// // actionSpaceInfo.subactionPath = subactionPaths[0];
-	// xr_result = xrCreateActionSpace(xr_session, &actionSpaceInfo, &spaceHead);
-	// if(!xrCheckResult(xr_instance, xr_result, "xrCreateActionSpace"))
-	// 	return false;
+	for(size_t i = 0; i < xr_actions_pose.size(); i++){
+		XrSpace space;
+		actionSpaceInfo.action = xr_actions_pose[i];
+		xr_result = xrCreateActionSpace(xr_session, &actionSpaceInfo, &space);
+		if(!xrCheckResult(xr_instance, xr_result, "xrCreateActionSpace"))
+			return false;
+		xr_space_actions_pose.push_back(space);
+	}
 	return true;
 }
 
@@ -1142,17 +1141,17 @@ bool OpenXrApplication::defineSwapchains(){
 	}
 
 	// create swapchain per view
-	std::cout << "Created swapchain (" << viewConfigurationViews.size() << ")" << std::endl;
+	std::cout << "Created swapchain (" << xr_view_configuration_views.size() << ")" << std::endl;
 
-	for(uint32_t i = 0; i < viewConfigurationViews.size(); i++){
+	for(uint32_t i = 0; i < xr_view_configuration_views.size(); i++){
 		XrSwapchainCreateInfo swapchainCreateInfo = {XR_TYPE_SWAPCHAIN_CREATE_INFO};
 		swapchainCreateInfo.arraySize = 1;
 		swapchainCreateInfo.format = selectedSwapchainFormats;
-		swapchainCreateInfo.width = viewConfigurationViews[i].recommendedImageRectWidth;
-		swapchainCreateInfo.height = viewConfigurationViews[i].recommendedImageRectHeight;
+		swapchainCreateInfo.width = xr_view_configuration_views[i].recommendedImageRectWidth;
+		swapchainCreateInfo.height = xr_view_configuration_views[i].recommendedImageRectHeight;
 		swapchainCreateInfo.mipCount = 1;
 		swapchainCreateInfo.faceCount = 1;
-		swapchainCreateInfo.sampleCount = xr_graphics_handler.getSupportedSwapchainSampleCount(viewConfigurationViews[i]);
+		swapchainCreateInfo.sampleCount = xr_graphics_handler.getSupportedSwapchainSampleCount(xr_view_configuration_views[i]);
 		swapchainCreateInfo.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
 		
 		SwapchainHandler swapchain;
@@ -1183,7 +1182,7 @@ bool OpenXrApplication::defineSwapchains(){
 		xrEnumerateSwapchainImages(swapchain.handle, propertyCountOutput, &propertyCountOutput, (XrSwapchainImageBaseHeader*)swapchain.images.data());
 		std::cout << "  |     |-- swapchain images: " << propertyCountOutput << std::endl;
 
-		swapchainsHandlers.push_back(swapchain);
+		xr_swapchains_handlers.push_back(swapchain);
 	}
 
 #ifdef XR_USE_GRAPHICS_API_OPENGL
@@ -1723,8 +1722,8 @@ bool OpenXrApplication::createSession(){
 												&xr_graphics_binding.glxFBConfig, 
 												&xr_graphics_binding.glxDrawable,
 												&xr_graphics_binding.glxContext,
-												viewConfigurationViews[0].recommendedImageRectWidth,
-												viewConfigurationViews[0].recommendedImageRectHeight))
+												xr_view_configuration_views[0].recommendedImageRectWidth,
+												xr_view_configuration_views[0].recommendedImageRectHeight))
 		return false;
 	if(!xr_graphics_handler.initResources(xr_instance, xr_system_id))
 		return false;
@@ -1853,10 +1852,6 @@ bool OpenXrApplication::pollEvents(bool * exitLoop){
 			case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED: {
 				// TODO: implement
 				std::cout << "TODO: XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED" << std::endl;
-				// LogActionSourceName(m_input.grabAction, "Grab");
-				// LogActionSourceName(m_input.quitAction, "Quit");
-				// LogActionSourceName(m_input.poseAction, "Pose");
-				// LogActionSourceName(m_input.vibrateAction, "Vibrate");
 				break;
 			}
 			// reference space is changing
@@ -1900,7 +1895,6 @@ bool OpenXrApplication::pollActions(vector<ActionState> & actionStates){
 			state.isActive = actionStateBoolean.isActive;
 			state.stateBool = (bool)actionStateBoolean.currentState;
 			actionStates.push_back(state);
-			// std::cout << "ACTION: actionStateBoolean " << xr_action_string_paths_boolean[i] << " " << actionStateBoolean.currentState << std::endl;
 		}
 	}
 
@@ -1918,7 +1912,6 @@ bool OpenXrApplication::pollActions(vector<ActionState> & actionStates){
 			state.isActive = actionStateFloat.isActive;
 			state.stateFloat = actionStateFloat.currentState;
 			actionStates.push_back(state);
-			// std::cout << "ACTION: actionStateFloat " << xr_action_string_paths_float[i] << " " << actionStateFloat.currentState << std::endl;
 		}
 	}
 
@@ -1937,7 +1930,6 @@ bool OpenXrApplication::pollActions(vector<ActionState> & actionStates){
 			state.stateVectorX = actionStateVector2f.currentState.x;
 			state.stateVectorY = actionStateVector2f.currentState.y;
 			actionStates.push_back(state);
-			// std::cout << "ACTION: actionStateVector2f " << xr_action_string_paths_vector2f[i] << " " << actionStateVector2f.currentState.x << " " << actionStateVector2f.currentState.y << std::endl;
 		}
 	}
 
@@ -1961,7 +1953,7 @@ bool OpenXrApplication::pollActions(vector<ActionState> & actionStates){
 	return true;
 }
 
-bool OpenXrApplication::renderViews(){
+bool OpenXrApplication::renderViews(XrReferenceSpaceType referenceSpaceType){
 	xr_graphics_handler.acquireContext(xr_graphics_binding, "xrWaitFrame");
 
 	XrFrameWaitInfo frameWaitInfo = {XR_TYPE_FRAME_WAIT_INFO};
@@ -1975,49 +1967,81 @@ bool OpenXrApplication::renderViews(){
 	if(!xrCheckResult(xr_instance, xr_result, "xrBeginFrame"))
 		return false;
 
+	// locate actions
+	// std::cout << std::endl;
+	XrSpaceLocation spaceLocation = {XR_TYPE_SPACE_LOCATION};
+	for(size_t i = 0; i < xr_space_actions_pose.size(); i++){
+		xr_result = xrLocateSpace(xr_space_actions_pose[i], xr_space_view, frameState.predictedDisplayTime, &spaceLocation);
+		if(!xrCheckResult(xr_instance, xr_result, "xrLocateSpace"))
+			return false;
+		
+		// if((spaceLocation.locationFlags & XR_VIEW_STATE_POSITION_VALID_BIT) != 0 || (spaceLocation.locationFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) != 0){
+		// 	std::cout << spaceLocation.pose.position.x << '\t' << spaceLocation.pose.position.y << '\t' << spaceLocation.pose.position.z << std::endl;
+		// }
+		// else
+		// 	std::cout << "Invalid location space" << std::endl;
+	}
+
 	vector<XrCompositionLayerBaseHeader*> layers;
 	XrCompositionLayerProjection layer = {XR_TYPE_COMPOSITION_LAYER_PROJECTION};
 	vector<XrCompositionLayerProjectionView> projectionLayerViews;
 
 	if(frameState.shouldRender == XR_TRUE){
-		// XrSpaceLocation spaceLocation = {XR_TYPE_SPACE_LOCATION};
-		// xr_result = xrLocateSpace(spaceHead, xr_space_local, frameState.predictedDisplayTime, &spaceLocation);
-		// if(!xrCheckResult(xr_instance, xr_result, "xrLocateSpace"))
-		// 	return false;
-
 		// XrSpaceLocationFlags flags = spaceLocation.locationFlags;
 		// if((flags & XR_SPACE_LOCATION_POSITION_VALID_BIT) && (flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
 		// 	std::cout << "pose: " << spaceLocation.pose.position.x << "\t" << spaceLocation.pose.position.y << "\t" << spaceLocation.pose.position.z << std::endl;
 		
-		vector<XrView> views(viewConfigurationViews.size(), {XR_TYPE_VIEW});
+		// locate views
+		vector<XrView> views(xr_view_configuration_views.size(), {XR_TYPE_VIEW});
 
 		XrViewState viewState = {XR_TYPE_VIEW_STATE};
-		uint32_t viewCapacityInput = (uint32_t)views.size();
 		uint32_t viewCountOutput;
 
 		XrViewLocateInfo viewLocateInfo = {XR_TYPE_VIEW_LOCATE_INFO};
 		viewLocateInfo.viewConfigurationType = configViewConfigurationType;
 		viewLocateInfo.displayTime = frameState.predictedDisplayTime;
-		viewLocateInfo.space = xr_space_local;
 
-		xr_result = xrLocateViews(xr_session, &viewLocateInfo, &viewState, viewCapacityInput, &viewCountOutput, views.data());
-		if(!xrCheckResult(xr_instance, xr_result, "xrLocateViews"))
+		if(referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW){
+			viewLocateInfo.space = xr_space_view;
+			xr_result = xrLocateViews(xr_session, &viewLocateInfo, &viewState, (uint32_t)views.size(), &viewCountOutput, views.data());
+			if(!xrCheckResult(xr_instance, xr_result, "xrLocateViews (XR_REFERENCE_SPACE_TYPE_VIEW)"))
+				return false;
+			if((viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) == 0 || (viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) == 0)
+				std::cout << "Invalid location view for XR_REFERENCE_SPACE_TYPE_VIEW" << std::endl;
+		}
+		else if(referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL){
+			viewLocateInfo.space = xr_space_local;
+			xr_result = xrLocateViews(xr_session, &viewLocateInfo, &viewState, (uint32_t)views.size(), &viewCountOutput, views.data());
+			if(!xrCheckResult(xr_instance, xr_result, "xrLocateViews (XR_REFERENCE_SPACE_TYPE_LOCAL)"))
+				return false;
+			if((viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) == 0 || (viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) == 0)
+				std::cout << "Invalid location view for XR_REFERENCE_SPACE_TYPE_LOCAL" << std::endl;
+		}
+		else if(referenceSpaceType == XR_REFERENCE_SPACE_TYPE_STAGE){
+			viewLocateInfo.space = xr_space_stage;
+			xr_result = xrLocateViews(xr_session, &viewLocateInfo, &viewState, (uint32_t)views.size(), &viewCountOutput, views.data());
+			if(!xrCheckResult(xr_instance, xr_result, "xrLocateViews (XR_REFERENCE_SPACE_TYPE_STAGE)"))
+				return false;
+			if((viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) == 0 || (viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) == 0)
+				std::cout << "Invalid location view for XR_REFERENCE_SPACE_TYPE_STAGE" << std::endl;
+		}
+		else{
+			std::cout << "Invalid reference space type (" << referenceSpaceType << ")" << std::endl;
 			return false;
-		if ((viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) == 0 || (viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) == 0)
-			return false;  // there is no valid tracking poses for the views
-
-		projectionLayerViews.resize(viewCountOutput);
+		}
 
 		// call render callback to get frames
 		if(renderCallback)
-			renderCallback(views.size(), views.data(), viewConfigurationViews.data());
+			renderCallback(views.size(), views.data(), xr_view_configuration_views.data());
 		else if(renderCallbackFunction)
-			renderCallbackFunction(views.size(), views, viewConfigurationViews);
+			renderCallbackFunction(views.size(), views, xr_view_configuration_views);
+		// TODO: render if there are images
 
 		// render view to the appropriate part of the swapchain image
-		for (uint32_t i = 0; i < viewCountOutput; i++){
+		projectionLayerViews.resize(viewCountOutput);
+		for(uint32_t i = 0; i < viewCountOutput; i++){
 			// Each view has a separate swapchain which is acquired, rendered to, and released
-			const SwapchainHandler viewSwapchain = swapchainsHandlers[i];
+			const SwapchainHandler viewSwapchain = xr_swapchains_handlers[i];
 
 			XrSwapchainImageAcquireInfo acquireInfo{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
 
@@ -2056,7 +2080,12 @@ bool OpenXrApplication::renderViews(){
 				return false;
 		}
 
-		layer.space = xr_space_local;
+		if(referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW)
+			layer.space = xr_space_view;
+		else if(referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL)
+			layer.space = xr_space_local;
+		else if(referenceSpaceType == XR_REFERENCE_SPACE_TYPE_STAGE)
+			layer.space = xr_space_stage;
 		layer.viewCount = (uint32_t)projectionLayerViews.size();
 		layer.views = projectionLayerViews.data();
 
@@ -2133,7 +2162,7 @@ int main(){
 		if(app->isSessionRunning()){
 			vector<ActionState> requestedActionStates;
 			app->pollActions(requestedActionStates);
-			// app->renderFrame();
+			app->renderViews(XR_REFERENCE_SPACE_TYPE_LOCAL);
 		}
 		else{
 			// Throttle loop since xrWaitFrame won't be called.
@@ -2177,7 +2206,7 @@ extern "C"
 				actionStates[i] = requestedActionStates[i];
 		return status;
 	}
-    bool renderViews(OpenXrApplication * app){ return app->renderViews(); }
+    bool renderViews(OpenXrApplication * app, int referenceSpaceType){ return app->renderViews(XrReferenceSpaceType(referenceSpaceType)); }
 
 	bool setFrames(OpenXrApplication * app, int leftWidth, int leftHeight, void * leftData, int rightWidth, int rightHeight, void * rightData, bool rgba){
 		if(app->getViewConfigurationViewsSize() == 1)
