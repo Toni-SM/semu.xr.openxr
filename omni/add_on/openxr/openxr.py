@@ -111,6 +111,10 @@ class OpenXR:
         self.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO = 1
         self.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO = 2
 
+        self.XR_REFERENCE_SPACE_TYPE_VIEW = 1
+        self.XR_REFERENCE_SPACE_TYPE_LOCAL = 2
+        self.XR_REFERENCE_SPACE_TYPE_STAGE = 3
+
         self.XR_ACTION_TYPE_BOOLEAN_INPUT = 1
         self.XR_ACTION_TYPE_FLOAT_INPUT = 2
         self.XR_ACTION_TYPE_VECTOR2F_INPUT = 3
@@ -170,7 +174,10 @@ class OpenXR:
             self._app = xrlib_p.OpenXrApplication()
             print("OpenXR.init", xrlib_p)
         
-        # self._viewport_interface = omni.kit.viewport.get_viewport_interface()
+        try:
+            self._viewport_interface = omni.kit.viewport.get_viewport_interface()
+        except Exception as e:
+            print("[WARNING] omni.kit.viewport.get_viewport_interface:", e)
         return True
 
     def is_session_running(self) -> bool:
@@ -278,14 +285,14 @@ class OpenXR:
                 self._callback_action_event[state["path"]](state["path"], value)
             return result[0]
 
-    def render_views(self) -> bool:
+    def render_views(self, reference_space: int = 2) -> bool:
         if self._callback_render_event is None:
             print("[WARNING] No callback has been established for rendering events. Internal callback will be used")
             self.subscribe_render_event()
         if self._use_ctypes:
-            return bool(self._lib.renderViews(self._app))
+            return bool(self._lib.renderViews(self._app, reference_space))
         else:
-            return self._app.renderViews()
+            return self._app.renderViews(reference_space)
 
     # action utilities
 
@@ -406,17 +413,37 @@ class OpenXR:
         self._transform_fit = fit
         self._transform_flip = flip
 
-    def teleport_camera(self, prim, position: pxr.Gf.Vec3d, rotation: pxr.Gf.Quatd) -> None:
+    def teleport_prim(self, prim, position: pxr.Gf.Vec3d, rotation: Union[pxr.Gf.Quatd, pxr.Gf.Vec3d]) -> None:
         properties = prim.GetPropertyNames()
+        translated, rotated = False, False
+        # translate
+        if "xformOp:translate" in properties or "xformOp:translation" in properties:
+            prim.GetAttribute("xformOp:translate").Set(position)
+            translated = True
+        # rotate
+        if "xformOp:rotate" in properties:
+            prim.GetAttribute("xformOp:rotate").Set(Gf.Rotation(rotation))
+        elif "xformOp:rotateXYZ" in properties:
+            # rotation = Gf.Matrix3d(rotation)
+            prim.GetAttribute("xformOp:rotateXYZ").Set(Gf.Vec3d(90, 0, 0))
+        
+        mat = Gf.Matrix4d()
+        mat.SetIdentity()
+        if not translated:
+            mat.SetTranslateOnly(position)
+        if not rotated:
+            mat.SetRotateOnly(Gf.Rotation(rotation))
         if "xformOp:transform" in properties:
-            prim.GetAttribute("xformOp:transform").Set(Gf.Matrix4d(Gf.Rotation(rotation), position))
+            prim.GetAttribute("xformOp:transform").Set(mat)
         else:
-            xform = UsdGeom.Xformable(prim)
-            xform_op = xform.AddXformOp(UsdGeom.XformOp.TypeTransform, UsdGeom.XformOp.PrecisionDouble, "")
-            xform_op.Set(Gf.Matrix4d(Gf.Rotation(rotation), position))
+            print("Create")
+            UsdGeom.Xformable(prim).AddXformOp(UsdGeom.XformOp.TypeTransform, UsdGeom.XformOp.PrecisionDouble, "").Set(mat)
 
     def subscribe_render_event(self, callback=None):
         def _internal_callback(num_views, views, configuration_views):
+            # XR_REFERENCE_SPACE_TYPE_VIEW:  +Y up, +X to the right, and -Z forward
+            # XR_REFERENCE_SPACE_TYPE_LOCAL: +Y up, +X to the right, and -Z forward
+            # XR_REFERENCE_SPACE_TYPE_STAGE: +Y up, and the X and Z axes aligned with the rectangle edges
             # teleport left camera
             if self._use_ctypes:
                 position = views[0].pose.position
@@ -426,9 +453,9 @@ class OpenXR:
             else:
                 position = views[0]["pose"]["position"]
                 rotation = views[0]["pose"]["orientation"]
-                position = Gf.Vec3d(position["x"], position["y"], position["z"])
+                position = Gf.Vec3d(position["x"] * 100, -position["z"] * 100, position["y"] * 100)
                 rotation = Gf.Quatd(rotation["w"], rotation["x"], rotation["y"], rotation["z"])
-            self.teleport_camera(self._prim_left, position, self._rectification_quat_left * rotation)
+            self.teleport_prim(self._prim_left, position, self._rectification_quat_left * rotation)            
 
             # teleport right camera
             if num_views == 2:
@@ -440,9 +467,9 @@ class OpenXR:
                 else:
                     position = views[1]["pose"]["position"]
                     rotation = views[1]["pose"]["orientation"]
-                    position = Gf.Vec3d(position["x"], position["y"], position["z"])
+                    position = Gf.Vec3d(position["x"] * 100, -position["z"] * 100, position["y"] * 100)
                     rotation = Gf.Quatd(rotation["w"], rotation["x"], rotation["y"], rotation["z"])
-                self.teleport_camera(self._prim_right, position, self._rectification_quat_right * rotation)
+                self.teleport_prim(self._prim_right, position, self._rectification_quat_right * rotation)
             
             # set frames
             try:
@@ -525,6 +552,7 @@ if __name__ == "__main__":
     end = False
 
     def callback_action(path, value):
+        return
         print(path, value)
 
     if _xr.create_instance():
@@ -536,6 +564,9 @@ if __name__ == "__main__":
             _xr.subscribe_action_event("/user/hand/right/input/trigger/value", callback=callback_action)
             _xr.subscribe_action_event("/user/hand/left/input/menu/click", callback=callback_action)
             _xr.subscribe_action_event("/user/hand/right/input/menu/click", callback=callback_action)
+
+            _xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=callback_action)
+            _xr.subscribe_action_event("/user/hand/right/input/grip/pose", callback=callback_action)
             if _xr.create_session():
                 ready = True
             else:
