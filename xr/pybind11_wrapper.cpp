@@ -131,7 +131,8 @@ PYBIND11_MODULE(xrlib_p, m){
         // utils
         .def("isSessionRunning", &OpenXrApplication::isSessionRunning)
         .def("getViewConfigurationViews", &OpenXrApplication::getViewConfigurationViews)
-        // setup OpenXr app
+        .def("getViewConfigurationViewsSize", &OpenXrApplication::getViewConfigurationViewsSize)
+        // setup app
         .def("createInstance", &OpenXrApplication::createInstance)
         .def("getSystem", [](OpenXrApplication &m, int formFactor, int blendMode, int configurationType){
                 return m.getSystem(XrFormFactor(formFactor), XrEnvironmentBlendMode(blendMode), XrViewConfigurationType(configurationType));
@@ -144,7 +145,7 @@ PYBIND11_MODULE(xrlib_p, m){
         .def("applyHapticFeedback", [](OpenXrApplication &m, string stringPath, float amplitude, int64_t duration, float frequency){
                 XrHapticVibration vibration = {XR_TYPE_HAPTIC_VIBRATION};
                 vibration.amplitude = amplitude;
-                vibration.duration = duration;
+                vibration.duration = XrDuration(duration);
                 vibration.frequency = frequency;
                 return m.applyHapticFeedback(stringPath, (XrHapticBaseHeader*)&vibration);
             })
