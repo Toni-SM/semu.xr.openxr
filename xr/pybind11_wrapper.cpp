@@ -139,8 +139,8 @@ PYBIND11_MODULE(xrlib_p, m){
             })
         .def("createSession", &OpenXrApplication::createSession)
         // actions
-        .def("addAction", [](OpenXrApplication &m, string stringPath, int actionType){
-                return m.addAction(stringPath, XrActionType(actionType));
+        .def("addAction", [](OpenXrApplication &m, string stringPath, int actionType, int referenceSpaceType){
+                return m.addAction(stringPath, XrActionType(actionType), XrReferenceSpaceType(referenceSpaceType));
             })
         .def("applyHapticFeedback", [](OpenXrApplication &m, string stringPath, float amplitude, int64_t duration, float frequency){
                 XrHapticVibration vibration = {XR_TYPE_HAPTIC_VIBRATION};
