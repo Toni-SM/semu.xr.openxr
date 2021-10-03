@@ -758,19 +758,20 @@ private:
 	OpenGLHandler xr_graphics_handler;
 #endif
 
-	bool defineLayers(vector<string>, vector<string> &);
-	bool defineExtensions(vector<string>, vector<string> &);
+	bool defineLayers(const vector<string> &, vector<string> &);
+	bool defineExtensions(const vector<string> &, vector<string> &);
 
 	bool acquireInstanceProperties();
 	bool acquireSystemProperties();
-	bool acquireBlendModes(XrEnvironmentBlendMode);
 	bool acquireViewConfiguration(XrViewConfigurationType);
+	bool acquireBlendModes(XrEnvironmentBlendMode);
 
 	bool defineReferenceSpaces();
+	void defineInteractionProfileBindings(vector<XrActionSuggestedBinding> &, const vector<string> &);
+	bool suggestInteractionProfileBindings();
 	bool defineSessionSpaces();
 	bool defineSwapchains();
 
-	void defineInteractionProfileBindings(vector<XrActionSuggestedBinding> &, vector<string>);
 	void cleanFrames(){
 		// for(size_t i = 0; i < xr_frames_data.size(); i++){
 		// 	xr_frames_data[i] = nullptr;
@@ -783,18 +784,16 @@ public:
 	OpenXrApplication();
 	~OpenXrApplication();
 
-	bool createInstance(string, string, vector<string>, vector<string>);
+	bool createInstance(const string &, const string &, const vector<string> &, const vector<string> &);
 	bool getSystem(XrFormFactor, XrEnvironmentBlendMode, XrViewConfigurationType); 
 	bool createSession();
-
-	bool addAction(string, XrActionType);
-	bool suggestInteractionProfileBindings();
-	bool applyHapticFeedback(string, XrHapticBaseHeader *);
-	bool stopHapticFeedback(string);
-
 	bool pollEvents(bool *);
 	bool pollActions(vector<ActionState> &);
 	bool renderViews(XrReferenceSpaceType, vector<ActionPoseState> &);
+
+	bool addAction(string, XrActionType, XrReferenceSpaceType);
+	bool applyHapticFeedback(string, XrHapticBaseHeader *);
+	bool stopHapticFeedback(string);
 
 	bool setFrameByIndex(int, int, int, void *, bool);
 	void setRenderCallbackFromPointer(void (*callback)(int, XrView*, XrViewConfigurationView*)){ renderCallback = callback; };
@@ -824,7 +823,7 @@ OpenXrApplication::~OpenXrApplication(){
 	}
 }
 
-bool OpenXrApplication::defineLayers(vector<string> requestedApiLayers, vector<string> & enabledApiLayers){
+bool OpenXrApplication::defineLayers(const vector<string> & requestedApiLayers, vector<string> & enabledApiLayers){
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateApiLayerProperties(0, &propertyCountOutput, nullptr);
 	if(!xrCheckResult(NULL, xr_result, "xrEnumerateApiLayerProperties"))
@@ -864,7 +863,7 @@ bool OpenXrApplication::defineLayers(vector<string> requestedApiLayers, vector<s
 	return true;
 }
 
-bool OpenXrApplication::defineExtensions(vector<string> requestedExtensions, vector<string> & enabledExtensions){
+bool OpenXrApplication::defineExtensions(const vector<string> & requestedExtensions, vector<string> & enabledExtensions){
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateInstanceExtensionProperties(nullptr, 0, &propertyCountOutput, nullptr);
 	if(!xrCheckResult(NULL, xr_result, "xrEnumerateInstanceExtensionProperties"))
@@ -934,31 +933,6 @@ bool OpenXrApplication::acquireSystemProperties(){
 	return true;
 }
 
-bool OpenXrApplication::acquireBlendModes(XrEnvironmentBlendMode blendMode){
-	uint32_t propertyCountOutput;
-	xr_result = xrEnumerateEnvironmentBlendModes(xr_instance, xr_system_id, configViewConfigurationType, 0, &propertyCountOutput, nullptr);
-	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateEnvironmentBlendModes"))
-		return false;
-	vector<XrEnvironmentBlendMode> environmentBlendModes(propertyCountOutput);
-	xr_result = xrEnumerateEnvironmentBlendModes(xr_instance, xr_system_id, configViewConfigurationType, propertyCountOutput, &propertyCountOutput, environmentBlendModes.data());
-	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateEnvironmentBlendModes"))
-		return false;
-
-	std::cout << "Environment blend modes (" << environmentBlendModes.size() << ")" << std::endl;
-	for (size_t i = 0; i < environmentBlendModes.size(); i++){
-		std::cout << "  |-- mode: " << environmentBlendModes[i] << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrEnvironmentBlendMode)" << std::endl;
-		if(environmentBlendModes[i] == blendMode){
-			std::cout << "  |   (requested)" << std::endl;
-			environmentBlendMode = blendMode;
-		}
-	}
-	if(environmentBlendMode == XR_ENVIRONMENT_BLEND_MODE_MAX_ENUM){
-		std::cout << "Unavailable blend mode: " << blendMode << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrEnvironmentBlendMode)" << std::endl;
-		return false;
-	}
-	return true;
-}
-
 bool OpenXrApplication::acquireViewConfiguration(XrViewConfigurationType configurationType){
 	uint32_t propertyCountOutput;
 	xr_result = xrEnumerateViewConfigurations(xr_instance, xr_system_id, 0, &propertyCountOutput, nullptr);
@@ -1016,6 +990,31 @@ bool OpenXrApplication::acquireViewConfiguration(XrViewConfigurationType configu
 	xr_frames_height.resize(xr_view_configuration_views.size());
 	cleanFrames();
 
+	return true;
+}
+
+bool OpenXrApplication::acquireBlendModes(XrEnvironmentBlendMode blendMode){
+	uint32_t propertyCountOutput;
+	xr_result = xrEnumerateEnvironmentBlendModes(xr_instance, xr_system_id, configViewConfigurationType, 0, &propertyCountOutput, nullptr);
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateEnvironmentBlendModes"))
+		return false;
+	vector<XrEnvironmentBlendMode> environmentBlendModes(propertyCountOutput);
+	xr_result = xrEnumerateEnvironmentBlendModes(xr_instance, xr_system_id, configViewConfigurationType, propertyCountOutput, &propertyCountOutput, environmentBlendModes.data());
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateEnvironmentBlendModes"))
+		return false;
+
+	std::cout << "Environment blend modes (" << environmentBlendModes.size() << ")" << std::endl;
+	for (size_t i = 0; i < environmentBlendModes.size(); i++){
+		std::cout << "  |-- mode: " << environmentBlendModes[i] << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrEnvironmentBlendMode)" << std::endl;
+		if(environmentBlendModes[i] == blendMode){
+			std::cout << "  |   (requested)" << std::endl;
+			environmentBlendMode = blendMode;
+		}
+	}
+	if(environmentBlendMode == XR_ENVIRONMENT_BLEND_MODE_MAX_ENUM){
+		std::cout << "Unavailable blend mode: " << blendMode << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrEnvironmentBlendMode)" << std::endl;
+		return false;
+	}
 	return true;
 }
 
@@ -1093,282 +1092,7 @@ bool OpenXrApplication::defineReferenceSpaces(){
 	return true;
 }
 
-bool OpenXrApplication::defineSessionSpaces(){
-	XrSessionActionSetsAttachInfo attachInfo{XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO};
-	attachInfo.countActionSets = 1;
-	attachInfo.actionSets = &xr_action_set;
-	xr_result = xrAttachSessionActionSets(xr_session, &attachInfo);
-	if(!xrCheckResult(xr_instance, xr_result, "xrAttachSessionActionSets"))
-		return false;
-
-	XrActionSpaceCreateInfo actionSpaceInfo = {XR_TYPE_ACTION_SPACE_CREATE_INFO};
-	actionSpaceInfo.poseInActionSpace.orientation.w = 1.f;
-	actionSpaceInfo.subactionPath = XR_NULL_PATH;
-
-	for(size_t i = 0; i < xr_actions.aPose.size(); i++){
-		XrSpace space;
-		actionSpaceInfo.action = xr_actions.aPose[i].action;
-		xr_result = xrCreateActionSpace(xr_session, &actionSpaceInfo, &space);
-		if(!xrCheckResult(xr_instance, xr_result, "xrCreateActionSpace"))
-			return false;
-		xr_actions.aPose[i].space = space;
-	}
-	return true;
-}
-
-bool OpenXrApplication::defineSwapchains(){
-	// get swapchain Formats
-	uint32_t propertyCountOutput;
-	xr_result = xrEnumerateSwapchainFormats(xr_session, 0, &propertyCountOutput, nullptr);
-	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateSwapchainFormats"))
-		return false;
-	vector<int64_t> swapchainFormats(propertyCountOutput);
-	xr_result = xrEnumerateSwapchainFormats(xr_session, propertyCountOutput, &propertyCountOutput, swapchainFormats.data());
-	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateSwapchainFormats"))
-		return false;
-
-	// select swapchain format
-#ifdef XR_USE_GRAPHICS_API_VULKAN
-	int64_t supportedSwapchainFormats[] = {VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM};
-#endif
-#ifdef XR_USE_GRAPHICS_API_OPENGL
-	int64_t supportedSwapchainFormats[] = {GL_RGB10_A2, GL_RGBA16F, GL_RGBA8, GL_RGBA8_SNORM};
-#endif
-
-	int64_t selectedSwapchainFormats = -1;
-	for(size_t i = 0; i < swapchainFormats.size(); i++){
-		for (size_t j = 0; j < _countof(supportedSwapchainFormats); j++)
-			if(swapchainFormats[i] == supportedSwapchainFormats[j]){
-				selectedSwapchainFormats = swapchainFormats[i];
-				break;
-			}
-		if(selectedSwapchainFormats != -1)
-			break;
-	}
-
-	std::cout << "Swapchain formats (" << swapchainFormats.size() << ")" << std::endl;
-	for (size_t i = 0; i < swapchainFormats.size(); i++){
-		std::cout << "  |-- format: " << swapchainFormats[i] << std::endl;
-		if (swapchainFormats[i] == selectedSwapchainFormats)
-			std::cout << "  |   (selected)" << std::endl;
-	}
-
-	// create swapchain per view
-	std::cout << "Created swapchain (" << xr_view_configuration_views.size() << ")" << std::endl;
-
-	for(uint32_t i = 0; i < xr_view_configuration_views.size(); i++){
-		XrSwapchainCreateInfo swapchainCreateInfo = {XR_TYPE_SWAPCHAIN_CREATE_INFO};
-		swapchainCreateInfo.arraySize = 1;
-		swapchainCreateInfo.format = selectedSwapchainFormats;
-		swapchainCreateInfo.width = xr_view_configuration_views[i].recommendedImageRectWidth;
-		swapchainCreateInfo.height = xr_view_configuration_views[i].recommendedImageRectHeight;
-		swapchainCreateInfo.mipCount = 1;
-		swapchainCreateInfo.faceCount = 1;
-		swapchainCreateInfo.sampleCount = xr_graphics_handler.getSupportedSwapchainSampleCount(xr_view_configuration_views[i]);
-		swapchainCreateInfo.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
-		
-		SwapchainHandler swapchain;
-		xr_result = xrCreateSwapchain(xr_session, &swapchainCreateInfo, &swapchain.handle);
-		if(!xrCheckResult(xr_instance, xr_result, "xrCreateSwapchain"))
-			return false;
-
-		swapchain.width = swapchainCreateInfo.width;
-		swapchain.height = swapchainCreateInfo.height;
-
-		std::cout << "  |-- swapchain: " << i << std::endl;
-		std::cout << "  |     |-- width: " << swapchainCreateInfo.width << std::endl;
-		std::cout << "  |     |-- height: " << swapchainCreateInfo.height << std::endl;
-		std::cout << "  |     |-- sample count: " << swapchainCreateInfo.sampleCount << std::endl;
-	
-		// enumerate swapchain images
-		xr_result = xrEnumerateSwapchainImages(swapchain.handle, 0, &propertyCountOutput, nullptr);
-		if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateSwapchainImages"))
-			return false;
-
-		swapchain.length = propertyCountOutput;
-#ifdef XR_USE_GRAPHICS_API_VULKAN
-		swapchain.images.resize(propertyCountOutput, {XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR});
-#endif
-#ifdef XR_USE_GRAPHICS_API_OPENGL
-		swapchain.images.resize(propertyCountOutput, {XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR});
-#endif
-		xrEnumerateSwapchainImages(swapchain.handle, propertyCountOutput, &propertyCountOutput, (XrSwapchainImageBaseHeader*)swapchain.images.data());
-		std::cout << "  |     |-- swapchain images: " << propertyCountOutput << std::endl;
-
-		xr_swapchains_handlers.push_back(swapchain);
-	}
-
-#ifdef XR_USE_GRAPHICS_API_OPENGL
-	// acquire GL context
-	glXMakeCurrent(xr_graphics_binding.xDisplay, xr_graphics_binding.glxDrawable, xr_graphics_binding.glxContext);
-#endif
-	return true;
-}
-
-
-bool OpenXrApplication::createInstance(string applicationName, string engineName, vector<string> requestedApiLayers, vector<string> requestedExtensions){
-	vector<string> enabledApiLayers;
-	vector<string> enabledExtensions;
-
-	// layers
-	if(!defineLayers(requestedApiLayers, enabledApiLayers))
-		return false;
-
-	// extensions
-	if(!defineExtensions(requestedExtensions, enabledExtensions))
-		return false;
-
-	vector<const char*> enabledApiLayerNames = cast_to_vector_char_p(enabledApiLayers);
-	vector<const char*> enabledExtensionNames = cast_to_vector_char_p(enabledExtensions);
-
-	// initialize OpenXR (create instance) with the enabled extensions and layers
-	XrInstanceCreateInfo createInfo = {XR_TYPE_INSTANCE_CREATE_INFO};
-	createInfo.next = NULL;
-	createInfo.createFlags = 0;
-	createInfo.enabledApiLayerCount = enabledApiLayers.size();
-	createInfo.enabledApiLayerNames = enabledApiLayerNames.data();
-	createInfo.enabledExtensionCount = enabledExtensions.size();
-	createInfo.enabledExtensionNames = enabledExtensionNames.data();
-	createInfo.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
-	createInfo.applicationInfo.applicationVersion = 1;
-	createInfo.applicationInfo.engineVersion = 1;
-
-	strncpy(createInfo.applicationInfo.applicationName, applicationName.c_str(), XR_MAX_APPLICATION_NAME_SIZE);
-	strncpy(createInfo.applicationInfo.engineName, engineName.c_str(), XR_MAX_ENGINE_NAME_SIZE);
-
-	xr_result = xrCreateInstance(&createInfo, &xr_instance);
-	if(!xrCheckResult(NULL, xr_result, "xrCreateInstance"))
-		return false;
-	return true;
-}
-
-bool OpenXrApplication::getSystem(XrFormFactor formFactor, XrEnvironmentBlendMode blendMode, XrViewConfigurationType configurationType){
-	XrSystemGetInfo systemInfo = {XR_TYPE_SYSTEM_GET_INFO};
-	systemInfo.formFactor = formFactor;
-
-	xr_result = xrGetSystem(xr_instance, &systemInfo, &xr_system_id);
-	if(!xrCheckResult(xr_instance, xr_result, "xrGetSystem"))
-		return false;
-	
-	if(!acquireInstanceProperties())
-		return false;
-	if(!acquireSystemProperties())
-		return false;
-	if(!acquireViewConfiguration(configurationType))
-		return false;
- 	if(!acquireBlendModes(blendMode))
-	 	return false;
-
-	// create action set
-	XrActionSetCreateInfo actionSetInfo = {XR_TYPE_ACTION_SET_CREATE_INFO};
-	strcpy(actionSetInfo.actionSetName, "actionset");
-	strcpy(actionSetInfo.localizedActionSetName, "localized_actionset");
-	actionSetInfo.priority = 0;
-
-	xr_result = xrCreateActionSet(xr_instance, &actionSetInfo, &xr_action_set);
-	if(!xrCheckResult(xr_instance, xr_result, "xrCreateActionSet"))
-		return false;
-	return true;
-}
-
-bool OpenXrApplication::addAction(string stringPath, XrActionType actionType){
-	XrPath path;
-	XrAction action;
-	xrStringToPath(xr_instance, stringPath.c_str(), &path);
-
-	string actionName = "";
-	string localizedActionName = "";
-
-	if(actionType == XR_ACTION_TYPE_BOOLEAN_INPUT)
-		actionName = "action_boolean_" + std::to_string(xr_actions.aBoolean.size());
-	else if(actionType == XR_ACTION_TYPE_FLOAT_INPUT)
-		actionName = "action_float_" + std::to_string(xr_actions.aFloat.size());
-	else if(actionType == XR_ACTION_TYPE_VECTOR2F_INPUT)
-		actionName = "action_vector2f_" + std::to_string(xr_actions.aVector2f.size());
-	else if(actionType == XR_ACTION_TYPE_POSE_INPUT)
-		actionName = "action_pose_" + std::to_string(xr_actions.aPose.size());
-	else if(actionType == XR_ACTION_TYPE_VIBRATION_OUTPUT)
-		actionName = "action_vibration_" + std::to_string(xr_actions.aVibration.size());
-	localizedActionName = "localized_" + actionName;
-
-	XrActionCreateInfo actionInfo = {XR_TYPE_ACTION_CREATE_INFO};
-	actionInfo.actionType = actionType;
-	strcpy(actionInfo.actionName, actionName.c_str());
-	strcpy(actionInfo.localizedActionName, localizedActionName.c_str());
-	actionInfo.countSubactionPaths = 0;
-	actionInfo.subactionPaths = nullptr;
-	
-	xr_result = xrCreateAction(xr_action_set, &actionInfo, &action);
-	if(!xrCheckResult(xr_instance, xr_result, "xrCreateAction"))
-		return false;
-	
-	if(actionType == XR_ACTION_TYPE_BOOLEAN_INPUT){
-		Action actionPackage;
-		actionPackage.action = action; 
-		actionPackage.path = path; 
-		actionPackage.stringPath = stringPath;
-		xr_actions.aBoolean.push_back(actionPackage);
-	}
-	else if(actionType == XR_ACTION_TYPE_FLOAT_INPUT){
-		Action actionPackage;
-		actionPackage.action = action; 
-		actionPackage.path = path; 
-		actionPackage.stringPath = stringPath;
-		xr_actions.aFloat.push_back(actionPackage);
-	}
-	else if(actionType == XR_ACTION_TYPE_VECTOR2F_INPUT){
-		Action actionPackage;
-		actionPackage.action = action; 
-		actionPackage.path = path; 
-		actionPackage.stringPath = stringPath;
-		xr_actions.aVector2f.push_back(actionPackage);
-	}
-	else if(actionType == XR_ACTION_TYPE_POSE_INPUT){
-		ActionPose actionPackage;
-		actionPackage.action = action; 
-		actionPackage.path = path; 
-		actionPackage.stringPath = stringPath;
-		xr_actions.aPose.push_back(actionPackage);
-	}
-	else if(actionType == XR_ACTION_TYPE_VIBRATION_OUTPUT){
-		Action actionPackage;
-		actionPackage.action = action; 
-		actionPackage.path = path; 
-		actionPackage.stringPath = stringPath;
-		xr_actions.aVibration.push_back(actionPackage);
-	}
-	return true;
-}
-
-bool OpenXrApplication::applyHapticFeedback(string stringPath, XrHapticBaseHeader * hapticFeedback){
-	for(size_t i = 0; i < xr_actions.aVibration.size(); i++)
-		if(!xr_actions.aVibration[i].stringPath.compare(stringPath)){
-			XrHapticActionInfo hapticActionInfo = {XR_TYPE_HAPTIC_ACTION_INFO};
-			hapticActionInfo.action = xr_actions.aVibration[i].action;
-			hapticActionInfo.subactionPath = XR_NULL_PATH;
-			xr_result = xrApplyHapticFeedback(xr_session, &hapticActionInfo, hapticFeedback);
-			if(!xrCheckResult(xr_instance, xr_result, "xrApplyHapticFeedback"))
-				return false;
-			return true;
-		}
-	return false;
-}
-
-bool OpenXrApplication::stopHapticFeedback(string stringPath){
-	for(size_t i = 0; i < xr_actions.aVibration.size(); i++)
-		if(!xr_actions.aVibration[i].stringPath.compare(stringPath)){
-			XrHapticActionInfo hapticActionInfo = {XR_TYPE_HAPTIC_ACTION_INFO};
-			hapticActionInfo.action = xr_actions.aVibration[i].action;
-			hapticActionInfo.subactionPath = XR_NULL_PATH;
-			xr_result = xrStopHapticFeedback(xr_session, &hapticActionInfo);
-			if(!xrCheckResult(xr_instance, xr_result, "xrStopHapticFeedback"))
-				return false;
-			return true;
-		}
-	return false;
-}
-
-void OpenXrApplication::defineInteractionProfileBindings(vector<XrActionSuggestedBinding> & bindings, vector<string> validPaths){
+void OpenXrApplication::defineInteractionProfileBindings(vector<XrActionSuggestedBinding> & bindings, const vector<string> & validPaths){
 	for(size_t i = 0; i < xr_actions.aBoolean.size(); i++)
 		if(std::find(validPaths.begin(), validPaths.end(), xr_actions.aBoolean[i].stringPath) != validPaths.end()){
 			XrActionSuggestedBinding binding;
@@ -1746,6 +1470,184 @@ bool OpenXrApplication::suggestInteractionProfileBindings(){
 	return true;
 }
 
+bool OpenXrApplication::defineSessionSpaces(){
+	XrSessionActionSetsAttachInfo attachInfo{XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO};
+	attachInfo.countActionSets = 1;
+	attachInfo.actionSets = &xr_action_set;
+	xr_result = xrAttachSessionActionSets(xr_session, &attachInfo);
+	if(!xrCheckResult(xr_instance, xr_result, "xrAttachSessionActionSets"))
+		return false;
+
+	XrActionSpaceCreateInfo actionSpaceInfo = {XR_TYPE_ACTION_SPACE_CREATE_INFO};
+	actionSpaceInfo.poseInActionSpace.orientation.w = 1.f;
+	actionSpaceInfo.subactionPath = XR_NULL_PATH;
+
+	for(size_t i = 0; i < xr_actions.aPose.size(); i++){
+		XrSpace space;
+		actionSpaceInfo.action = xr_actions.aPose[i].action;
+		xr_result = xrCreateActionSpace(xr_session, &actionSpaceInfo, &space);
+		if(!xrCheckResult(xr_instance, xr_result, "xrCreateActionSpace"))
+			return false;
+		xr_actions.aPose[i].space = space;
+	}
+	return true;
+}
+
+bool OpenXrApplication::defineSwapchains(){
+	// get swapchain Formats
+	uint32_t propertyCountOutput;
+	xr_result = xrEnumerateSwapchainFormats(xr_session, 0, &propertyCountOutput, nullptr);
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateSwapchainFormats"))
+		return false;
+	vector<int64_t> swapchainFormats(propertyCountOutput);
+	xr_result = xrEnumerateSwapchainFormats(xr_session, propertyCountOutput, &propertyCountOutput, swapchainFormats.data());
+	if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateSwapchainFormats"))
+		return false;
+
+	// select swapchain format
+#ifdef XR_USE_GRAPHICS_API_VULKAN
+	int64_t supportedSwapchainFormats[] = {VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM};
+#endif
+#ifdef XR_USE_GRAPHICS_API_OPENGL
+	int64_t supportedSwapchainFormats[] = {GL_RGB10_A2, GL_RGBA16F, GL_RGBA8, GL_RGBA8_SNORM};
+#endif
+
+	int64_t selectedSwapchainFormats = -1;
+	for(size_t i = 0; i < swapchainFormats.size(); i++){
+		for (size_t j = 0; j < _countof(supportedSwapchainFormats); j++)
+			if(swapchainFormats[i] == supportedSwapchainFormats[j]){
+				selectedSwapchainFormats = swapchainFormats[i];
+				break;
+			}
+		if(selectedSwapchainFormats != -1)
+			break;
+	}
+
+	std::cout << "Swapchain formats (" << swapchainFormats.size() << ")" << std::endl;
+	for (size_t i = 0; i < swapchainFormats.size(); i++){
+		std::cout << "  |-- format: " << swapchainFormats[i] << std::endl;
+		if (swapchainFormats[i] == selectedSwapchainFormats)
+			std::cout << "  |   (selected)" << std::endl;
+	}
+
+	// create swapchain per view
+	std::cout << "Created swapchain (" << xr_view_configuration_views.size() << ")" << std::endl;
+
+	for(uint32_t i = 0; i < xr_view_configuration_views.size(); i++){
+		XrSwapchainCreateInfo swapchainCreateInfo = {XR_TYPE_SWAPCHAIN_CREATE_INFO};
+		swapchainCreateInfo.arraySize = 1;
+		swapchainCreateInfo.format = selectedSwapchainFormats;
+		swapchainCreateInfo.width = xr_view_configuration_views[i].recommendedImageRectWidth;
+		swapchainCreateInfo.height = xr_view_configuration_views[i].recommendedImageRectHeight;
+		swapchainCreateInfo.mipCount = 1;
+		swapchainCreateInfo.faceCount = 1;
+		swapchainCreateInfo.sampleCount = xr_graphics_handler.getSupportedSwapchainSampleCount(xr_view_configuration_views[i]);
+		swapchainCreateInfo.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+		
+		SwapchainHandler swapchain;
+		xr_result = xrCreateSwapchain(xr_session, &swapchainCreateInfo, &swapchain.handle);
+		if(!xrCheckResult(xr_instance, xr_result, "xrCreateSwapchain"))
+			return false;
+
+		swapchain.width = swapchainCreateInfo.width;
+		swapchain.height = swapchainCreateInfo.height;
+
+		std::cout << "  |-- swapchain: " << i << std::endl;
+		std::cout << "  |     |-- width: " << swapchainCreateInfo.width << std::endl;
+		std::cout << "  |     |-- height: " << swapchainCreateInfo.height << std::endl;
+		std::cout << "  |     |-- sample count: " << swapchainCreateInfo.sampleCount << std::endl;
+	
+		// enumerate swapchain images
+		xr_result = xrEnumerateSwapchainImages(swapchain.handle, 0, &propertyCountOutput, nullptr);
+		if(!xrCheckResult(xr_instance, xr_result, "xrEnumerateSwapchainImages"))
+			return false;
+
+		swapchain.length = propertyCountOutput;
+#ifdef XR_USE_GRAPHICS_API_VULKAN
+		swapchain.images.resize(propertyCountOutput, {XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR});
+#endif
+#ifdef XR_USE_GRAPHICS_API_OPENGL
+		swapchain.images.resize(propertyCountOutput, {XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR});
+#endif
+		xrEnumerateSwapchainImages(swapchain.handle, propertyCountOutput, &propertyCountOutput, (XrSwapchainImageBaseHeader*)swapchain.images.data());
+		std::cout << "  |     |-- swapchain images: " << propertyCountOutput << std::endl;
+
+		xr_swapchains_handlers.push_back(swapchain);
+	}
+
+#ifdef XR_USE_GRAPHICS_API_OPENGL
+	// acquire GL context
+	glXMakeCurrent(xr_graphics_binding.xDisplay, xr_graphics_binding.glxDrawable, xr_graphics_binding.glxContext);
+#endif
+	return true;
+}
+
+
+bool OpenXrApplication::createInstance(const string & applicationName, const string & engineName, const vector<string> & requestedApiLayers, const vector<string> & requestedExtensions){
+	vector<string> enabledApiLayers;
+	vector<string> enabledExtensions;
+
+	// layers
+	if(!defineLayers(requestedApiLayers, enabledApiLayers))
+		return false;
+
+	// extensions
+	if(!defineExtensions(requestedExtensions, enabledExtensions))
+		return false;
+
+	vector<const char*> enabledApiLayerNames = cast_to_vector_char_p(enabledApiLayers);
+	vector<const char*> enabledExtensionNames = cast_to_vector_char_p(enabledExtensions);
+
+	// initialize OpenXR (create instance) with the enabled extensions and layers
+	XrInstanceCreateInfo createInfo = {XR_TYPE_INSTANCE_CREATE_INFO};
+	createInfo.next = NULL;
+	createInfo.createFlags = 0;
+	createInfo.enabledApiLayerCount = enabledApiLayers.size();
+	createInfo.enabledApiLayerNames = enabledApiLayerNames.data();
+	createInfo.enabledExtensionCount = enabledExtensions.size();
+	createInfo.enabledExtensionNames = enabledExtensionNames.data();
+	createInfo.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
+	createInfo.applicationInfo.applicationVersion = 1;
+	createInfo.applicationInfo.engineVersion = 1;
+
+	strncpy(createInfo.applicationInfo.applicationName, applicationName.c_str(), XR_MAX_APPLICATION_NAME_SIZE);
+	strncpy(createInfo.applicationInfo.engineName, engineName.c_str(), XR_MAX_ENGINE_NAME_SIZE);
+
+	xr_result = xrCreateInstance(&createInfo, &xr_instance);
+	if(!xrCheckResult(NULL, xr_result, "xrCreateInstance"))
+		return false;
+	return true;
+}
+
+bool OpenXrApplication::getSystem(XrFormFactor formFactor, XrEnvironmentBlendMode blendMode, XrViewConfigurationType configurationType){
+	XrSystemGetInfo systemInfo = {XR_TYPE_SYSTEM_GET_INFO};
+	systemInfo.formFactor = formFactor;
+
+	xr_result = xrGetSystem(xr_instance, &systemInfo, &xr_system_id);
+	if(!xrCheckResult(xr_instance, xr_result, "xrGetSystem"))
+		return false;
+	
+	if(!acquireInstanceProperties())
+		return false;
+	if(!acquireSystemProperties())
+		return false;
+	if(!acquireViewConfiguration(configurationType))
+		return false;
+ 	if(!acquireBlendModes(blendMode))
+	 	return false;
+
+	// create action set
+	XrActionSetCreateInfo actionSetInfo = {XR_TYPE_ACTION_SET_CREATE_INFO};
+	strcpy(actionSetInfo.actionSetName, "actionset");
+	strcpy(actionSetInfo.localizedActionSetName, "localized_actionset");
+	actionSetInfo.priority = 0;
+
+	xr_result = xrCreateActionSet(xr_instance, &actionSetInfo, &xr_action_set);
+	if(!xrCheckResult(xr_instance, xr_result, "xrCreateActionSet"))
+		return false;
+	return true;
+}
+
 bool OpenXrApplication::createSession(){
 #ifdef XR_USE_GRAPHICS_API_VULKAN
 	xr_graphics_handler.createInstance(xr_instance, xr_system_id);
@@ -1902,7 +1804,7 @@ bool OpenXrApplication::pollEvents(bool * exitLoop){
 			}
 			case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED: {
 				// TODO: implement
-				std::cout << "TODO: XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED" << std::endl;
+				std::cout << "XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED" << std::endl;
 				break;
 			}
 			// reference space is changing
@@ -2020,7 +1922,19 @@ bool OpenXrApplication::renderViews(XrReferenceSpaceType referenceSpaceType, vec
 	// locate actions
 	XrSpaceLocation spaceLocation = {XR_TYPE_SPACE_LOCATION};
 	for(size_t i = 0; i < xr_actions.aPose.size(); i++){
-		xr_result = xrLocateSpace(xr_actions.aPose[i].space, xr_space_view, frameState.predictedDisplayTime, &spaceLocation);
+		XrSpace actionPoseSpace; 
+		if(xr_actions.aPose[i].referenceSpaceType == XR_REFERENCE_SPACE_TYPE_VIEW)
+			actionPoseSpace = xr_space_view;
+		else if(xr_actions.aPose[i].referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL)
+			actionPoseSpace = xr_space_local;
+		else if(xr_actions.aPose[i].referenceSpaceType == XR_REFERENCE_SPACE_TYPE_STAGE)
+			actionPoseSpace = xr_space_stage;
+		else{
+			std::cout << "[WARNING] Invalid reference space (" << xr_actions.aPose[i].referenceSpaceType << ") for " << xr_actions.aPose[i].stringPath << std::endl;
+			continue;
+		}
+
+		xr_result = xrLocateSpace(xr_actions.aPose[i].space, actionPoseSpace, frameState.predictedDisplayTime, &spaceLocation);
 		if(!xrCheckResult(xr_instance, xr_result, "xrLocateSpace"))
 			return false;
 		
@@ -2155,6 +2069,109 @@ bool OpenXrApplication::renderViews(XrReferenceSpaceType referenceSpaceType, vec
 	return true;
 }
 
+
+bool OpenXrApplication::addAction(string stringPath, XrActionType actionType, XrReferenceSpaceType referenceSpaceType){
+	XrPath path;
+	XrAction action;
+	xrStringToPath(xr_instance, stringPath.c_str(), &path);
+
+	string actionName = "";
+	string localizedActionName = "";
+
+	if(actionType == XR_ACTION_TYPE_BOOLEAN_INPUT)
+		actionName = "action_boolean_" + std::to_string(xr_actions.aBoolean.size());
+	else if(actionType == XR_ACTION_TYPE_FLOAT_INPUT)
+		actionName = "action_float_" + std::to_string(xr_actions.aFloat.size());
+	else if(actionType == XR_ACTION_TYPE_VECTOR2F_INPUT)
+		actionName = "action_vector2f_" + std::to_string(xr_actions.aVector2f.size());
+	else if(actionType == XR_ACTION_TYPE_POSE_INPUT)
+		actionName = "action_pose_" + std::to_string(xr_actions.aPose.size());
+	else if(actionType == XR_ACTION_TYPE_VIBRATION_OUTPUT)
+		actionName = "action_vibration_" + std::to_string(xr_actions.aVibration.size());
+	localizedActionName = "localized_" + actionName;
+
+	XrActionCreateInfo actionInfo = {XR_TYPE_ACTION_CREATE_INFO};
+	actionInfo.actionType = actionType;
+	strcpy(actionInfo.actionName, actionName.c_str());
+	strcpy(actionInfo.localizedActionName, localizedActionName.c_str());
+	actionInfo.countSubactionPaths = 0;
+	actionInfo.subactionPaths = nullptr;
+	
+	xr_result = xrCreateAction(xr_action_set, &actionInfo, &action);
+	if(!xrCheckResult(xr_instance, xr_result, "xrCreateAction"))
+		return false;
+	
+	if(actionType == XR_ACTION_TYPE_BOOLEAN_INPUT){
+		Action actionPackage;
+		actionPackage.action = action; 
+		actionPackage.path = path; 
+		actionPackage.stringPath = stringPath;
+		xr_actions.aBoolean.push_back(actionPackage);
+	}
+	else if(actionType == XR_ACTION_TYPE_FLOAT_INPUT){
+		Action actionPackage;
+		actionPackage.action = action; 
+		actionPackage.path = path; 
+		actionPackage.stringPath = stringPath;
+		xr_actions.aFloat.push_back(actionPackage);
+	}
+	else if(actionType == XR_ACTION_TYPE_VECTOR2F_INPUT){
+		Action actionPackage;
+		actionPackage.action = action; 
+		actionPackage.path = path; 
+		actionPackage.stringPath = stringPath;
+		xr_actions.aVector2f.push_back(actionPackage);
+	}
+	else if(actionType == XR_ACTION_TYPE_POSE_INPUT){
+		ActionPose actionPackage;
+		actionPackage.action = action; 
+		actionPackage.path = path; 
+		actionPackage.stringPath = stringPath;
+		actionPackage.referenceSpaceType = referenceSpaceType;
+		xr_actions.aPose.push_back(actionPackage);
+	}
+	else if(actionType == XR_ACTION_TYPE_VIBRATION_OUTPUT){
+		Action actionPackage;
+		actionPackage.action = action; 
+		actionPackage.path = path; 
+		actionPackage.stringPath = stringPath;
+		xr_actions.aVibration.push_back(actionPackage);
+	}
+	return true;
+}
+
+bool OpenXrApplication::applyHapticFeedback(string stringPath, XrHapticBaseHeader * hapticFeedback){
+	for(size_t i = 0; i < xr_actions.aVibration.size(); i++)
+		if(!xr_actions.aVibration[i].stringPath.compare(stringPath)){
+			XrHapticActionInfo hapticActionInfo = {XR_TYPE_HAPTIC_ACTION_INFO};
+			hapticActionInfo.action = xr_actions.aVibration[i].action;
+			hapticActionInfo.subactionPath = XR_NULL_PATH;
+			xr_result = xrApplyHapticFeedback(xr_session, &hapticActionInfo, hapticFeedback);
+			if(!xrCheckResult(xr_instance, xr_result, "xrApplyHapticFeedback"))
+				return false;
+			return true;
+		}
+	return false;
+}
+
+bool OpenXrApplication::stopHapticFeedback(string stringPath){
+	for(size_t i = 0; i < xr_actions.aVibration.size(); i++)
+		if(!xr_actions.aVibration[i].stringPath.compare(stringPath)){
+			XrHapticActionInfo hapticActionInfo = {XR_TYPE_HAPTIC_ACTION_INFO};
+			hapticActionInfo.action = xr_actions.aVibration[i].action;
+			hapticActionInfo.subactionPath = XR_NULL_PATH;
+			xr_result = xrStopHapticFeedback(xr_session, &hapticActionInfo);
+			if(!xrCheckResult(xr_instance, xr_result, "xrStopHapticFeedback"))
+				return false;
+			return true;
+		}
+	return false;
+}
+
+
+
+
+
 bool OpenXrApplication::setFrameByIndex(int index, int width, int height, void * frame, bool rgba){
 	if(index < 0 || (size_t)index >= xr_frames_data.size())
 		return false;
@@ -2263,8 +2280,8 @@ extern "C"
 	}
 
 	// actions
-	bool addAction(OpenXrApplication * app, const char * stringPath, int actionType){ 
-		return app->addAction(stringPath, XrActionType(actionType)); 
+	bool addAction(OpenXrApplication * app, const char * stringPath, int actionType, int referenceSpaceType){ 
+		return app->addAction(stringPath, XrActionType(actionType), XrReferenceSpaceType(referenceSpaceType)); 
 	}
 	bool applyHapticFeedback(OpenXrApplication * app, const char * stringPath, float amplitude, int64_t duration, float frequency){ 
 		XrHapticVibration vibration = {XR_TYPE_HAPTIC_VIBRATION};
