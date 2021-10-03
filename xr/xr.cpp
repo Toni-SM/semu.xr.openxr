@@ -77,6 +77,28 @@ struct ActionPoseState{
 	XrPosef pose;			// XR_TYPE_ACTION_STATE_POSE
 };
 
+struct Action{
+	XrAction action;
+	XrPath path;
+ 	string stringPath;
+};
+
+struct ActionPose{
+	XrReferenceSpaceType referenceSpaceType;
+	XrSpace space;
+	XrAction action;
+	XrPath path;
+ 	string stringPath;
+};
+
+struct Actions{
+	vector<Action> aBoolean;
+	vector<Action> aFloat;
+	vector<Action> aVector2f;
+	vector<ActionPose> aPose;
+	vector<Action> aVibration;
+};
+
 struct SwapchainHandler{
   	XrSwapchain handle;
     int32_t width;
@@ -709,26 +731,7 @@ private:
 
 	// actions
 	XrActionSet xr_action_set;
-
-	vector<XrSpace> xr_space_actions_pose;
-
-	vector<XrAction> xr_actions_boolean;
-	vector<XrAction> xr_actions_float;
-	vector<XrAction> xr_actions_vector2f;
-	vector<XrAction> xr_actions_pose;
-	vector<XrAction> xr_actions_vibration;
-
-	vector<XrPath> xr_action_paths_boolean;
-	vector<XrPath> xr_action_paths_float;
-	vector<XrPath> xr_action_paths_vector2f;
-	vector<XrPath> xr_action_paths_pose;
-	vector<XrPath> xr_action_paths_vibration;
-
-	vector<string> xr_action_string_paths_boolean;
-	vector<string> xr_action_string_paths_float;
-	vector<string> xr_action_string_paths_vector2f;
-	vector<string> xr_action_string_paths_pose;
-	vector<string> xr_action_string_paths_vibration;
+	Actions xr_actions;
 
 	vector<SwapchainHandler> xr_swapchains_handlers;
 	vector<XrViewConfigurationView> xr_view_configuration_views;
@@ -813,8 +816,8 @@ OpenXrApplication::~OpenXrApplication(){
 		xrDestroySpace(xr_space_local);
 		xrDestroySpace(xr_space_stage);
 
-		for(size_t i = 0; i < xr_space_actions_pose.size(); i++)
-			xrDestroySpace(xr_space_actions_pose[i]);
+		for(size_t i = 0; i < xr_actions.aPose.size(); i++)
+			xrDestroySpace(xr_actions.aPose[i].space);
 
 		xrDestroySession(xr_session);
 		xrDestroyInstance(xr_instance);
@@ -1102,13 +1105,13 @@ bool OpenXrApplication::defineSessionSpaces(){
 	actionSpaceInfo.poseInActionSpace.orientation.w = 1.f;
 	actionSpaceInfo.subactionPath = XR_NULL_PATH;
 
-	for(size_t i = 0; i < xr_actions_pose.size(); i++){
+	for(size_t i = 0; i < xr_actions.aPose.size(); i++){
 		XrSpace space;
-		actionSpaceInfo.action = xr_actions_pose[i];
+		actionSpaceInfo.action = xr_actions.aPose[i].action;
 		xr_result = xrCreateActionSpace(xr_session, &actionSpaceInfo, &space);
 		if(!xrCheckResult(xr_instance, xr_result, "xrCreateActionSpace"))
 			return false;
-		xr_space_actions_pose.push_back(space);
+		xr_actions.aPose[i].space = space;
 	}
 	return true;
 }
@@ -1277,15 +1280,15 @@ bool OpenXrApplication::addAction(string stringPath, XrActionType actionType){
 	string localizedActionName = "";
 
 	if(actionType == XR_ACTION_TYPE_BOOLEAN_INPUT)
-		actionName = "action_boolean_" + std::to_string(xr_actions_boolean.size());
+		actionName = "action_boolean_" + std::to_string(xr_actions.aBoolean.size());
 	else if(actionType == XR_ACTION_TYPE_FLOAT_INPUT)
-		actionName = "action_float_" + std::to_string(xr_actions_float.size());
+		actionName = "action_float_" + std::to_string(xr_actions.aFloat.size());
 	else if(actionType == XR_ACTION_TYPE_VECTOR2F_INPUT)
-		actionName = "action_vector2f_" + std::to_string(xr_actions_vector2f.size());
+		actionName = "action_vector2f_" + std::to_string(xr_actions.aVector2f.size());
 	else if(actionType == XR_ACTION_TYPE_POSE_INPUT)
-		actionName = "action_pose_" + std::to_string(xr_actions_pose.size());
+		actionName = "action_pose_" + std::to_string(xr_actions.aPose.size());
 	else if(actionType == XR_ACTION_TYPE_VIBRATION_OUTPUT)
-		actionName = "action_vibration_" + std::to_string(xr_actions_vibration.size());
+		actionName = "action_vibration_" + std::to_string(xr_actions.aVibration.size());
 	localizedActionName = "localized_" + actionName;
 
 	XrActionCreateInfo actionInfo = {XR_TYPE_ACTION_CREATE_INFO};
@@ -1300,38 +1303,48 @@ bool OpenXrApplication::addAction(string stringPath, XrActionType actionType){
 		return false;
 	
 	if(actionType == XR_ACTION_TYPE_BOOLEAN_INPUT){
-		xr_actions_boolean.push_back(action); 
-		xr_action_paths_boolean.push_back(path); 
-		xr_action_string_paths_boolean.push_back(stringPath); 
+		Action actionPackage;
+		actionPackage.action = action; 
+		actionPackage.path = path; 
+		actionPackage.stringPath = stringPath;
+		xr_actions.aBoolean.push_back(actionPackage);
 	}
 	else if(actionType == XR_ACTION_TYPE_FLOAT_INPUT){
-		xr_actions_float.push_back(action); 
-		xr_action_paths_float.push_back(path); 
-		xr_action_string_paths_float.push_back(stringPath); 
+		Action actionPackage;
+		actionPackage.action = action; 
+		actionPackage.path = path; 
+		actionPackage.stringPath = stringPath;
+		xr_actions.aFloat.push_back(actionPackage);
 	}
 	else if(actionType == XR_ACTION_TYPE_VECTOR2F_INPUT){
-		xr_actions_vector2f.push_back(action); 
-		xr_action_paths_vector2f.push_back(path); 
-		xr_action_string_paths_vector2f.push_back(stringPath); 
+		Action actionPackage;
+		actionPackage.action = action; 
+		actionPackage.path = path; 
+		actionPackage.stringPath = stringPath;
+		xr_actions.aVector2f.push_back(actionPackage);
 	}
 	else if(actionType == XR_ACTION_TYPE_POSE_INPUT){
-		xr_actions_pose.push_back(action); 
-		xr_action_paths_pose.push_back(path); 
-		xr_action_string_paths_pose.push_back(stringPath); 
+		ActionPose actionPackage;
+		actionPackage.action = action; 
+		actionPackage.path = path; 
+		actionPackage.stringPath = stringPath;
+		xr_actions.aPose.push_back(actionPackage);
 	}
 	else if(actionType == XR_ACTION_TYPE_VIBRATION_OUTPUT){
-		xr_actions_vibration.push_back(action); 
-		xr_action_paths_vibration.push_back(path); 
-		xr_action_string_paths_vibration.push_back(stringPath); 
+		Action actionPackage;
+		actionPackage.action = action; 
+		actionPackage.path = path; 
+		actionPackage.stringPath = stringPath;
+		xr_actions.aVibration.push_back(actionPackage);
 	}
 	return true;
 }
 
 bool OpenXrApplication::applyHapticFeedback(string stringPath, XrHapticBaseHeader * hapticFeedback){
-	for(size_t i = 0; i < xr_actions_vibration.size(); i++)
-		if(!xr_action_string_paths_vibration[i].compare(stringPath)){
+	for(size_t i = 0; i < xr_actions.aVibration.size(); i++)
+		if(!xr_actions.aVibration[i].stringPath.compare(stringPath)){
 			XrHapticActionInfo hapticActionInfo = {XR_TYPE_HAPTIC_ACTION_INFO};
-			hapticActionInfo.action = xr_actions_vibration[i];
+			hapticActionInfo.action = xr_actions.aVibration[i].action;
 			hapticActionInfo.subactionPath = XR_NULL_PATH;
 			xr_result = xrApplyHapticFeedback(xr_session, &hapticActionInfo, hapticFeedback);
 			if(!xrCheckResult(xr_instance, xr_result, "xrApplyHapticFeedback"))
@@ -1342,10 +1355,10 @@ bool OpenXrApplication::applyHapticFeedback(string stringPath, XrHapticBaseHeade
 }
 
 bool OpenXrApplication::stopHapticFeedback(string stringPath){
-	for(size_t i = 0; i < xr_actions_vibration.size(); i++)
-		if(!xr_action_string_paths_vibration[i].compare(stringPath)){
+	for(size_t i = 0; i < xr_actions.aVibration.size(); i++)
+		if(!xr_actions.aVibration[i].stringPath.compare(stringPath)){
 			XrHapticActionInfo hapticActionInfo = {XR_TYPE_HAPTIC_ACTION_INFO};
-			hapticActionInfo.action = xr_actions_vibration[i];
+			hapticActionInfo.action = xr_actions.aVibration[i].action;
 			hapticActionInfo.subactionPath = XR_NULL_PATH;
 			xr_result = xrStopHapticFeedback(xr_session, &hapticActionInfo);
 			if(!xrCheckResult(xr_instance, xr_result, "xrStopHapticFeedback"))
@@ -1356,39 +1369,39 @@ bool OpenXrApplication::stopHapticFeedback(string stringPath){
 }
 
 void OpenXrApplication::defineInteractionProfileBindings(vector<XrActionSuggestedBinding> & bindings, vector<string> validPaths){
-	for(size_t i = 0; i < xr_actions_boolean.size(); i++)
-		if(std::find(validPaths.begin(), validPaths.end(), xr_action_string_paths_boolean[i]) != validPaths.end()){
+	for(size_t i = 0; i < xr_actions.aBoolean.size(); i++)
+		if(std::find(validPaths.begin(), validPaths.end(), xr_actions.aBoolean[i].stringPath) != validPaths.end()){
 			XrActionSuggestedBinding binding;
-			binding.action = xr_actions_boolean[i];
-			binding.binding = xr_action_paths_boolean[i];
+			binding.action = xr_actions.aBoolean[i].action;
+			binding.binding = xr_actions.aBoolean[i].path;
 			bindings.push_back(binding);
 		}
-	for(size_t i = 0; i < xr_actions_float.size(); i++)
-		if(std::find(validPaths.begin(), validPaths.end(), xr_action_string_paths_float[i]) != validPaths.end()){
+	for(size_t i = 0; i < xr_actions.aFloat.size(); i++)
+		if(std::find(validPaths.begin(), validPaths.end(), xr_actions.aFloat[i].stringPath) != validPaths.end()){
 			XrActionSuggestedBinding binding;
-			binding.action = xr_actions_float[i];
-			binding.binding = xr_action_paths_float[i];
+			binding.action = xr_actions.aFloat[i].action;
+			binding.binding = xr_actions.aFloat[i].path;
 			bindings.push_back(binding);
 		}
-	for(size_t i = 0; i < xr_actions_vector2f.size(); i++)
-		if(std::find(validPaths.begin(), validPaths.end(), xr_action_string_paths_vector2f[i]) != validPaths.end()){
+	for(size_t i = 0; i < xr_actions.aVector2f.size(); i++)
+		if(std::find(validPaths.begin(), validPaths.end(), xr_actions.aVector2f[i].stringPath) != validPaths.end()){
 			XrActionSuggestedBinding binding;
-			binding.action = xr_actions_vector2f[i];
-			binding.binding = xr_action_paths_vector2f[i];
+			binding.action = xr_actions.aVector2f[i].action;
+			binding.binding = xr_actions.aVector2f[i].path;
 			bindings.push_back(binding);
 		}
-	for(size_t i = 0; i < xr_actions_pose.size(); i++)
-		if(std::find(validPaths.begin(), validPaths.end(), xr_action_string_paths_pose[i]) != validPaths.end()){
+	for(size_t i = 0; i < xr_actions.aPose.size(); i++)
+		if(std::find(validPaths.begin(), validPaths.end(), xr_actions.aPose[i].stringPath) != validPaths.end()){
 			XrActionSuggestedBinding binding;
-			binding.action = xr_actions_pose[i];
-			binding.binding = xr_action_paths_pose[i];
+			binding.action = xr_actions.aPose[i].action;
+			binding.binding = xr_actions.aPose[i].path;
 			bindings.push_back(binding);
 		}
-	for(size_t i = 0; i < xr_actions_vibration.size(); i++)
-		if(std::find(validPaths.begin(), validPaths.end(), xr_action_string_paths_vibration[i]) != validPaths.end()){
+	for(size_t i = 0; i < xr_actions.aVibration.size(); i++)
+		if(std::find(validPaths.begin(), validPaths.end(), xr_actions.aVibration[i].stringPath) != validPaths.end()){
 			XrActionSuggestedBinding binding;
-			binding.action = xr_actions_vibration[i];
-			binding.binding = xr_action_paths_vibration[i];
+			binding.action = xr_actions.aVibration[i].action;
+			binding.binding = xr_actions.aVibration[i].path;
 			bindings.push_back(binding);
 		}
 }
@@ -1921,15 +1934,15 @@ bool OpenXrApplication::pollActions(vector<ActionState> & actionStates){
 
 	// boolean
 	XrActionStateBoolean actionStateBoolean = {XR_TYPE_ACTION_STATE_BOOLEAN};
-	for(size_t i = 0; i < xr_actions_boolean.size(); i++){
-		getInfo.action = xr_actions_boolean[i];
+	for(size_t i = 0; i < xr_actions.aBoolean.size(); i++){
+		getInfo.action = xr_actions.aBoolean[i].action;
 		xr_result = xrGetActionStateBoolean(xr_session, &getInfo, &actionStateBoolean);
 		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStateBoolean"))
 			return false;
 		if(actionStateBoolean.isActive && actionStateBoolean.changedSinceLastSync){
 			ActionState state;
 			state.type = XR_ACTION_TYPE_BOOLEAN_INPUT;
-			state.path = xr_action_string_paths_boolean[i].c_str();
+			state.path = xr_actions.aBoolean[i].stringPath.c_str();
 			state.isActive = actionStateBoolean.isActive;
 			state.stateBool = (bool)actionStateBoolean.currentState;
 			actionStates.push_back(state);
@@ -1938,15 +1951,15 @@ bool OpenXrApplication::pollActions(vector<ActionState> & actionStates){
 
 	// float
 	XrActionStateFloat actionStateFloat = {XR_TYPE_ACTION_STATE_FLOAT};
-	for(size_t i = 0; i < xr_actions_float.size(); i++){
-		getInfo.action = xr_actions_float[i];
+	for(size_t i = 0; i < xr_actions.aFloat.size(); i++){
+		getInfo.action = xr_actions.aFloat[i].action;
 		xr_result = xrGetActionStateFloat(xr_session, &getInfo, &actionStateFloat);
 		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStateFloat"))
 			return false;
 		if(actionStateFloat.isActive && actionStateFloat.changedSinceLastSync){
 			ActionState state;
 			state.type = XR_ACTION_TYPE_FLOAT_INPUT;
-			state.path = xr_action_string_paths_float[i].c_str();
+			state.path = xr_actions.aFloat[i].stringPath.c_str();
 			state.isActive = actionStateFloat.isActive;
 			state.stateFloat = actionStateFloat.currentState;
 			actionStates.push_back(state);
@@ -1955,15 +1968,15 @@ bool OpenXrApplication::pollActions(vector<ActionState> & actionStates){
 
 	// vector2f
 	XrActionStateVector2f actionStateVector2f = {XR_TYPE_ACTION_STATE_VECTOR2F};
-	for(size_t i = 0; i < xr_actions_vector2f.size(); i++){
-		getInfo.action = xr_actions_vector2f[i];
+	for(size_t i = 0; i < xr_actions.aVector2f.size(); i++){
+		getInfo.action = xr_actions.aVector2f[i].action;
 		xr_result = xrGetActionStateVector2f(xr_session, &getInfo, &actionStateVector2f);
 		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStateVector2f"))
 			return false;
 		if(actionStateVector2f.isActive && actionStateVector2f.changedSinceLastSync){
 			ActionState state;
 			state.type = XR_ACTION_TYPE_VECTOR2F_INPUT;
-			state.path = xr_action_string_paths_vector2f[i].c_str();
+			state.path = xr_actions.aVector2f[i].stringPath.c_str();
 			state.isActive = actionStateVector2f.isActive;
 			state.stateVectorX = actionStateVector2f.currentState.x;
 			state.stateVectorY = actionStateVector2f.currentState.y;
@@ -1973,15 +1986,15 @@ bool OpenXrApplication::pollActions(vector<ActionState> & actionStates){
 
 	// pose
 	XrActionStatePose actionStatePose = {XR_TYPE_ACTION_STATE_POSE};
-	for(size_t i = 0; i < xr_actions_pose.size(); i++){
-		getInfo.action = xr_actions_pose[i];
+	for(size_t i = 0; i < xr_actions.aPose.size(); i++){
+		getInfo.action = xr_actions.aPose[i].action;
 		xr_result = xrGetActionStatePose(xr_session, &getInfo, &actionStatePose);
 		if(!xrCheckResult(xr_instance, xr_result, "xrGetActionStatePose"))
 			return false;
 		if(actionStatePose.isActive){
 			ActionState state;
 			state.type = XR_ACTION_TYPE_POSE_INPUT;
-			state.path = xr_action_string_paths_pose[i].c_str();
+			state.path = xr_actions.aPose[i].stringPath.c_str();
 			state.isActive = actionStatePose.isActive;
 			actionStates.push_back(state);
 		}
@@ -2006,14 +2019,14 @@ bool OpenXrApplication::renderViews(XrReferenceSpaceType referenceSpaceType, vec
 
 	// locate actions
 	XrSpaceLocation spaceLocation = {XR_TYPE_SPACE_LOCATION};
-	for(size_t i = 0; i < xr_space_actions_pose.size(); i++){
-		xr_result = xrLocateSpace(xr_space_actions_pose[i], xr_space_view, frameState.predictedDisplayTime, &spaceLocation);
+	for(size_t i = 0; i < xr_actions.aPose.size(); i++){
+		xr_result = xrLocateSpace(xr_actions.aPose[i].space, xr_space_view, frameState.predictedDisplayTime, &spaceLocation);
 		if(!xrCheckResult(xr_instance, xr_result, "xrLocateSpace"))
 			return false;
 		
 		ActionPoseState state;
 		state.type = XR_ACTION_TYPE_POSE_INPUT;
-		state.path = xr_action_string_paths_pose[i].c_str();
+		state.path = xr_actions.aPose[i].stringPath.c_str();
 		state.isActive = false;
 		if((spaceLocation.locationFlags & XR_VIEW_STATE_POSITION_VALID_BIT) != 0 || (spaceLocation.locationFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) != 0){
 			state.isActive = true;
