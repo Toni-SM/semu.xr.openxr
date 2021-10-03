@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Callable
 
 import os
 import sys
@@ -25,6 +25,40 @@ else:
             Path = None
     Gf = pxr.Gf
 
+
+# constants
+XR_KHR_OPENGL_ENABLE_EXTENSION_NAME = "XR_KHR_opengl_enable"
+XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME = "XR_KHR_opengl_es_enable"
+XR_KHR_VULKAN_ENABLE_EXTENSION_NAME = "XR_KHR_vulkan_enable"
+XR_KHR_D3D11_ENABLE_EXTENSION_NAME = "XR_KHR_D3D11_enable"
+XR_KHR_D3D12_ENABLE_EXTENSION_NAME = "XR_KHR_D3D12_enable"
+
+XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY = 1
+XR_FORM_FACTOR_HANDHELD_DISPLAY = 2
+
+XR_ENVIRONMENT_BLEND_MODE_OPAQUE = 1
+XR_ENVIRONMENT_BLEND_MODE_ADDITIVE = 2
+XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND = 3
+
+XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO = 1
+XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO = 2
+
+XR_REFERENCE_SPACE_TYPE_VIEW = 1
+XR_REFERENCE_SPACE_TYPE_LOCAL = 2
+XR_REFERENCE_SPACE_TYPE_STAGE = 3
+
+XR_ACTION_TYPE_BOOLEAN_INPUT = 1
+XR_ACTION_TYPE_FLOAT_INPUT = 2
+XR_ACTION_TYPE_VECTOR2F_INPUT = 3
+XR_ACTION_TYPE_POSE_INPUT = 4
+XR_ACTION_TYPE_VIBRATION_OUTPUT = 100
+
+XR_NO_DURATION = 0
+XR_INFINITE_DURATION = 2**32
+XR_MIN_HAPTIC_DURATION = -1
+XR_FREQUENCY_UNSPECIFIED = 0
+
+
 def acquire_openxr_interface():
     return OpenXR()
 
@@ -33,6 +67,9 @@ def release_openxr_interface(xr):
     pass
 
 
+
+
+# structures (ctypes)
 XrActionType = ctypes.c_int
 XrStructureType = ctypes.c_int
 
@@ -73,6 +110,8 @@ class ActionPoseState(ctypes.Structure):
                 ('pose', XrPosef)]
 
 
+
+
 class OpenXR:
     def __init__(self) -> None:
         self._lib = None
@@ -101,90 +140,78 @@ class OpenXR:
         self._callback_action_pose_events = {}
         self._callback_render_event = None
 
-        # constants
-        self.XR_KHR_OPENGL_ENABLE_EXTENSION_NAME = "XR_KHR_opengl_enable"
-        self.XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME = "XR_KHR_opengl_es_enable"
-        self.XR_KHR_VULKAN_ENABLE_EXTENSION_NAME = "XR_KHR_vulkan_enable"
-        self.XR_KHR_D3D11_ENABLE_EXTENSION_NAME = "XR_KHR_D3D11_enable"
-        self.XR_KHR_D3D12_ENABLE_EXTENSION_NAME = "XR_KHR_D3D12_enable"
-
-        self.XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY = 1
-        self.XR_FORM_FACTOR_HANDHELD_DISPLAY = 2
-
-        self.XR_ENVIRONMENT_BLEND_MODE_OPAQUE = 1
-        self.XR_ENVIRONMENT_BLEND_MODE_ADDITIVE = 2
-        self.XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND = 3
-
-        self.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO = 1
-        self.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO = 2
-
-        self.XR_REFERENCE_SPACE_TYPE_VIEW = 1
-        self.XR_REFERENCE_SPACE_TYPE_LOCAL = 2
-        self.XR_REFERENCE_SPACE_TYPE_STAGE = 3
-
-        self.XR_ACTION_TYPE_BOOLEAN_INPUT = 1
-        self.XR_ACTION_TYPE_FLOAT_INPUT = 2
-        self.XR_ACTION_TYPE_VECTOR2F_INPUT = 3
-        self.XR_ACTION_TYPE_POSE_INPUT = 4
-        self.XR_ACTION_TYPE_VIBRATION_OUTPUT = 100
-
-        self.XR_NO_DURATION = 0
-        self.XR_INFINITE_DURATION = 2**32
-        self.XR_MIN_HAPTIC_DURATION = -1
-        self.XR_FREQUENCY_UNSPECIFIED = 0
-
     def init(self, graphics: str = "OpenGL", use_ctypes: bool = False) -> bool:
         """
-        Init OpenXR by loading the compiled library
+        Init OpenXR application by loading the related libraries
+
+        Parameters
+        ----------
+        graphics: str
+            OpenXR graphics API supported by the runtime (OpenGL, OpenGLES, Vulkan, D3D11, D3D12).
+            Note: At the moment only OpenGL is available
+        use_ctypes: bool, optional
+            If true, use ctypes as C/C++ interface instead of pybind11 (default)
+
+        Returns
+        -------
+        bool
+            True if initialization was successful, otherwise False
         """
+        # TODO: what about no graphic API (only controllers for example)?
         self._use_ctypes = use_ctypes
         # graphics API
-        if graphics in ["OpenGL", self.XR_KHR_OPENGL_ENABLE_EXTENSION_NAME]:
-            self._graphics = self.XR_KHR_OPENGL_ENABLE_EXTENSION_NAME
-        elif graphics in ["OpenGLES", self.XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME]:
-            self._graphics = self.XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME
+        if graphics in ["OpenGL", XR_KHR_OPENGL_ENABLE_EXTENSION_NAME]:
+            self._graphics = XR_KHR_OPENGL_ENABLE_EXTENSION_NAME
+        elif graphics in ["OpenGLES", XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME]:
+            self._graphics = XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME
             raise NotImplementedError("OpenGLES graphics API is not implemented yet")
-        elif graphics in ["Vulkan", self.XR_KHR_VULKAN_ENABLE_EXTENSION_NAME]:
-            self._graphics = self.XR_KHR_VULKAN_ENABLE_EXTENSION_NAME
+        elif graphics in ["Vulkan", XR_KHR_VULKAN_ENABLE_EXTENSION_NAME]:
+            self._graphics = XR_KHR_VULKAN_ENABLE_EXTENSION_NAME
             raise NotImplementedError("Vulkan graphics API is not implemented yet")
-        elif graphics in ["D3D11", self.XR_KHR_D3D11_ENABLE_EXTENSION_NAME]:
-            self._graphics = self.XR_KHR_D3D11_ENABLE_EXTENSION_NAME
+        elif graphics in ["D3D11", XR_KHR_D3D11_ENABLE_EXTENSION_NAME]:
+            self._graphics = XR_KHR_D3D11_ENABLE_EXTENSION_NAME
             raise NotImplementedError("D3D11 graphics API is not implemented yet")
-        elif graphics in ["D3D12", self.XR_KHR_D3D12_ENABLE_EXTENSION_NAME]:
-            self._graphics = self.XR_KHR_D3D12_ENABLE_EXTENSION_NAME
+        elif graphics in ["D3D12", XR_KHR_D3D12_ENABLE_EXTENSION_NAME]:
+            self._graphics = XR_KHR_D3D12_ENABLE_EXTENSION_NAME
             raise NotImplementedError("D3D12 graphics API is not implemented yet")
         else:
             raise ValueError("Invalid graphics API ({}). Valid graphics APIs are OpenGL, OpenGLES, Vulkan, D3D11, D3D12".format(graphics))
 
-        # TODO: catch exceptions
+        # libraries path
         if __name__ == "__main__":
             extension_path = os.getcwd()[:os.getcwd().find("/omni/add_on/openxr")]
         else:
             extension_path = __file__[:__file__.find("/omni/add_on/openxr")]
-        # ctypes
-        if self._use_ctypes:
-            ctypes.PyDLL(os.path.join(extension_path, "bin", "libGL.so"), mode = ctypes.RTLD_GLOBAL)
-            ctypes.PyDLL(os.path.join(extension_path, "bin", "libSDL2.so"), mode = ctypes.RTLD_GLOBAL)
-            ctypes.PyDLL(os.path.join(extension_path, "bin", "libopenxr_loader.so"), mode = ctypes.RTLD_GLOBAL)
+        
+        try:
+            # ctypes
+            if self._use_ctypes:
+                ctypes.PyDLL(os.path.join(extension_path, "bin", "libGL.so"), mode = ctypes.RTLD_GLOBAL)
+                ctypes.PyDLL(os.path.join(extension_path, "bin", "libSDL2.so"), mode = ctypes.RTLD_GLOBAL)
+                ctypes.PyDLL(os.path.join(extension_path, "bin", "libopenxr_loader.so"), mode = ctypes.RTLD_GLOBAL)
+                
+                self._lib = ctypes.PyDLL(os.path.join(extension_path, "bin", "xrlib_c.so"), mode = ctypes.RTLD_GLOBAL)
+                self._app = self._lib.openXrApplication()
+                print("[INFO] OpenXR initialized using ctypes interface")
             
-            self._lib = ctypes.PyDLL(os.path.join(extension_path, "bin", "xrlib_c.so"), mode = ctypes.RTLD_GLOBAL)
-            self._app = self._lib.openXrApplication()
-            print("OpenXR.init", self._lib)
-        # pybind11
-        else:
-            sys.setdlopenflags(os.RTLD_GLOBAL | os.RTLD_LAZY)
-            sys.path.append(os.path.join(extension_path, "bin"))
-            # change cwd
-            tmp_dir= os.getcwd()
-            os.chdir(extension_path)
-            #import library
-            import xrlib_p
-            #restore cwd
-            os.chdir(tmp_dir)
+            # pybind11
+            else:
+                sys.setdlopenflags(os.RTLD_GLOBAL | os.RTLD_LAZY)
+                sys.path.append(os.path.join(extension_path, "bin"))
+                # change cwd
+                tmp_dir= os.getcwd()
+                os.chdir(extension_path)
+                #import library
+                import xrlib_p
+                #restore cwd
+                os.chdir(tmp_dir)
 
-            self._lib = xrlib_p
-            self._app = xrlib_p.OpenXrApplication()
-            print("OpenXR.init", xrlib_p)
+                self._lib = xrlib_p
+                self._app = xrlib_p.OpenXrApplication()
+                print("[INFO] OpenXR initialized using pybind11 interface")
+        except Exception as e:
+            print("[ERROR] OpenXR initialization:", e)
+            return False
         
         try:
             self._viewport_interface = omni.kit.viewport.get_viewport_interface()
@@ -193,15 +220,46 @@ class OpenXR:
         return True
 
     def is_session_running(self) -> bool:
+        """
+        OpenXR session's running status
+
+        Returns
+        -------
+        bool
+            Return True if the OpenXR session is running, False otherwise
+        """
         if self._use_ctypes:
             return bool(self._lib.isSessionRunning(self._app))
         else:
             return self._app.isSessionRunning()
 
-    def create_instance(self, application_name: str = "Omniverse (VR)", 
-                              engine_name: str = "OpenXR Engine", 
-                              api_layers: list = [], 
-                              extensions: list = []) -> bool:
+    def create_instance(self, application_name: str = "Omniverse (VR)", engine_name: str = "", api_layers: list = [], extensions: list = []) -> bool:
+        """
+        Create an OpenXR instance to allow communication with an OpenXR runtime
+
+        OpenXR internal function calls:
+        - xrEnumerateApiLayerProperties
+        - xrEnumerateInstanceExtensionProperties
+        - xrCreateInstance 
+
+        Parameters
+        ----------
+        application_name: str, optional
+            Name of the OpenXR application (default: 'Omniverse (VR)')
+        engine_name: str, optional
+            Name of the engine (if any) used to create the application (empty by default)
+        api_layers: list of str, optional
+            [API layers](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#api-layers) to be inserted between the OpenXR application and the runtime implementation.
+        extensions: list of str, optional
+            [Extensions](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#extensions) to be loaded.
+            Note: At the moment only the graphic extensions are configured.
+            Note: The graphics API selected during initialization (init) is automatically included in the extensions to be loaded.
+        
+        Returns
+        -------
+        bool
+            True if the instance has been created successfully, otherwise False
+        """
         if self._graphics not in extensions:
             extensions += [self._graphics]
         
@@ -225,18 +283,45 @@ class OpenXR:
             return self._app.createInstance(application_name, engine_name, api_layers, extensions)
 
     def get_system(self, form_factor: int = 1, blend_mode: int = 1, view_configuration_type: int = 2) -> bool:
+        """
+        Obtain the system represented by a collection of related devices at runtime
+
+        OpenXR internal function calls:
+        - xrGetSystem
+        - xrGetInstanceProperties
+        - xrGetSystemProperties
+        - xrEnumerateViewConfigurations
+        - xrGetViewConfigurationProperties
+        - xrEnumerateViewConfigurationViews
+        - xrEnumerateEnvironmentBlendModes
+        - xrCreateActionSet (actionSetName: 'actionset', localizedActionSetName: 'localized_actionset')
+        
+        Parameters
+        ----------
+        form_factor: {XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, XR_FORM_FACTOR_HANDHELD_DISPLAY}, optional
+            Desired [form factor](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#form_factor_description) from XrFormFactor enum (default: XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY)
+        blend_mode: {XR_ENVIRONMENT_BLEND_MODE_OPAQUE, XR_ENVIRONMENT_BLEND_MODE_ADDITIVE, XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND}, optional
+            Desired environment [blend mode](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#environment_blend_mode) from XrEnvironmentBlendMode enum (default: XR_ENVIRONMENT_BLEND_MODE_OPAQUE)
+        view_configuration_type: {XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO}, optional
+            Primary [view configuration] (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#view_configurations) type from XrViewConfigurationType enum (default: XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO)
+
+        Returns
+        -------
+        bool
+            True if the system has been obtained successfully, otherwise False
+        """
         # check form_factor
-        if not form_factor in [self.XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, self.XR_FORM_FACTOR_HANDHELD_DISPLAY]:
+        if not form_factor in [XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, XR_FORM_FACTOR_HANDHELD_DISPLAY]:
             raise ValueError("Invalid form factor ({}). Valid form factors are XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY ({}), XR_FORM_FACTOR_HANDHELD_DISPLAY ({})" \
-                             .format(form_factor, self.XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, self.XR_FORM_FACTOR_HANDHELD_DISPLAY))
+                             .format(form_factor, XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY, XR_FORM_FACTOR_HANDHELD_DISPLAY))
         # check blend_mode
-        if not blend_mode in [self.XR_ENVIRONMENT_BLEND_MODE_OPAQUE, self.XR_ENVIRONMENT_BLEND_MODE_ADDITIVE, self.XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND]:
+        if not blend_mode in [XR_ENVIRONMENT_BLEND_MODE_OPAQUE, XR_ENVIRONMENT_BLEND_MODE_ADDITIVE, XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND]:
             raise ValueError("Invalid blend mode ({}). Valid blend modes are XR_ENVIRONMENT_BLEND_MODE_OPAQUE ({}), XR_ENVIRONMENT_BLEND_MODE_ADDITIVE ({}), XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND ({})" \
-                             .format(blend_mode, self.XR_ENVIRONMENT_BLEND_MODE_OPAQUE, self.XR_ENVIRONMENT_BLEND_MODE_ADDITIVE, self.XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND))
+                             .format(blend_mode, XR_ENVIRONMENT_BLEND_MODE_OPAQUE, XR_ENVIRONMENT_BLEND_MODE_ADDITIVE, XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND))
         # check view_configuration_type
-        if not view_configuration_type in [self.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO, self.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO]:
+        if not view_configuration_type in [XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO]:
             raise ValueError("Invalid view configuration type ({}). Valid view configuration types are XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO ({}), XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO ({})" \
-                             .format(view_configuration_type, self.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO, self.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO))
+                             .format(view_configuration_type, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO))
 
         if self._use_ctypes:
             return bool(self._lib.getSystem(self._app, form_factor, blend_mode, view_configuration_type))
@@ -244,12 +329,45 @@ class OpenXR:
             return self._app.getSystem(form_factor, blend_mode, view_configuration_type)
 
     def create_session(self) -> bool:
+        """
+        Create an OpenXR session that represents an application's intention to display XR content
+
+        OpenXR internal function calls:
+        - xrCreateSession
+        - xrEnumerateReferenceSpaces
+        - xrCreateReferenceSpace
+        - xrGetReferenceSpaceBoundsRect
+        - xrSuggestInteractionProfileBindings
+        - xrAttachSessionActionSets
+        - xrCreateActionSpace
+        - xrEnumerateSwapchainFormats
+        - xrCreateSwapchain
+        - xrEnumerateSwapchainImages
+        
+        Returns
+        -------
+        bool
+            True if the session has been created successfully, otherwise False
+        """
         if self._use_ctypes:
             return bool(self._lib.createSession(self._app))
         else:
             return self._app.createSession()
 
     def poll_events(self) -> bool:
+        """
+        [Event polling](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#event-polling) and processing
+
+        OpenXR internal function calls:
+        - xrPollEvent
+        - xrBeginSession
+        - xrEndSession
+
+        Returns
+        -------
+        bool
+            False if the running session needs to end (due to the user closing or switching the application, etc.), otherwise False
+        """
         if self._use_ctypes:
             exit_loop = ctypes.c_bool(False)
             result = bool(self._lib.pollEvents(self._app, ctypes.byref(exit_loop)))
@@ -259,6 +377,21 @@ class OpenXR:
             return result[0] and not result[1]
 
     def poll_actions(self) -> bool:
+        """
+        [Action](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_action_overview) polling
+
+        OpenXR internal function calls:
+        - xrSyncActions
+        - xrGetActionStateBoolean
+        - xrGetActionStateFloat
+        - xrGetActionStateVector2f
+        - xrGetActionStatePose
+
+        Returns
+        -------
+        bool
+            True if there is no error during polling, otherwise False
+        """
         if self._use_ctypes:
             requested_action_states = (ActionState * len(self._callback_action_events.keys()))()
             result = bool(self._lib.pollActions(self._app, requested_action_states, len(requested_action_states)))
@@ -267,15 +400,15 @@ class OpenXR:
                 value = None
                 if not state.type:
                     break
-                if state.type == self.XR_ACTION_TYPE_BOOLEAN_INPUT:
+                if state.type == XR_ACTION_TYPE_BOOLEAN_INPUT:
                     value = state.stateBool
-                elif state.type == self.XR_ACTION_TYPE_FLOAT_INPUT:
+                elif state.type == XR_ACTION_TYPE_FLOAT_INPUT:
                     value = state.stateFloat
-                elif state.type == self.XR_ACTION_TYPE_VECTOR2F_INPUT:
+                elif state.type == XR_ACTION_TYPE_VECTOR2F_INPUT:
                     value = (state.stateVectorX, state.stateVectorY)
-                elif state.type == self.XR_ACTION_TYPE_POSE_INPUT:
+                elif state.type == XR_ACTION_TYPE_POSE_INPUT:
                     continue
-                elif state.type == self.XR_ACTION_TYPE_VIBRATION_OUTPUT:
+                elif state.type == XR_ACTION_TYPE_VIBRATION_OUTPUT:
                     continue
                 self._callback_action_events[state.path.decode("utf-8")](state.path.decode("utf-8"), value)
             return result
@@ -285,20 +418,43 @@ class OpenXR:
 
             for state in result[1]:
                 value = None
-                if state["type"] == self.XR_ACTION_TYPE_BOOLEAN_INPUT:
+                if state["type"] == XR_ACTION_TYPE_BOOLEAN_INPUT:
                     value = state["stateBool"]
-                elif state["type"] == self.XR_ACTION_TYPE_FLOAT_INPUT:
+                elif state["type"] == XR_ACTION_TYPE_FLOAT_INPUT:
                     value = state["stateFloat"]
-                elif state["type"] == self.XR_ACTION_TYPE_VECTOR2F_INPUT:
+                elif state["type"] == XR_ACTION_TYPE_VECTOR2F_INPUT:
                     value = (state["stateVectorX"], state["stateVectorY"])
-                elif state["type"] == self.XR_ACTION_TYPE_POSE_INPUT:
+                elif state["type"] == XR_ACTION_TYPE_POSE_INPUT:
                     continue
-                elif state["type"] == self.XR_ACTION_TYPE_VIBRATION_OUTPUT:
+                elif state["type"] == XR_ACTION_TYPE_VIBRATION_OUTPUT:
                     continue
                 self._callback_action_events[state["path"]](state["path"], value)
             return result[0]
 
     def render_views(self, reference_space: int = 2) -> bool:
+        """
+        Present rendered images to the user's views according to the selected reference space
+        
+        OpenXR internal function calls:
+        - xrWaitFrame
+        - xrBeginFrame
+        - xrLocateSpace
+        - xrLocateViews
+        - xrAcquireSwapchainImage
+        - xrWaitSwapchainImage
+        - xrReleaseSwapchainImage
+        - xrEndFrame
+
+        Parameters
+        ----------
+        reference_space: {XR_REFERENCE_SPACE_TYPE_VIEW, XR_REFERENCE_SPACE_TYPE_LOCAL, XR_REFERENCE_SPACE_TYPE_STAGE}, optional
+            Desired [reference space](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#reference-spaces) type from XrReferenceSpaceType enum used to render the images (default: XR_REFERENCE_SPACE_TYPE_LOCAL)
+
+        Returns
+        -------
+        bool
+            True if there is no error during rendering, otherwise False
+        """
         if self._callback_render_event is None:
             print("[WARNING] No callback has been established for rendering events. Internal callback will be used")
             self.subscribe_render_event()
@@ -309,7 +465,7 @@ class OpenXR:
 
             for state in requested_action_pose_states:
                 value = None
-                if state.type == self.XR_ACTION_TYPE_POSE_INPUT and state.isActive:
+                if state.type == XR_ACTION_TYPE_POSE_INPUT and state.isActive:
                     value = ((state.pose.position.x, state.pose.position.y, state.pose.position.z),
                              (state.pose.orientation.x, state.pose.orientation.y, state.pose.orientation.z, state.pose.orientation.w))
                     self._callback_action_events[state.path.decode("utf-8")](state.path.decode("utf-8"), value)
@@ -320,72 +476,163 @@ class OpenXR:
 
             for state in result[1]:
                 value = None
-                if state["type"] == self.XR_ACTION_TYPE_POSE_INPUT and state["isActive"]:
-                    # value = XrPosef()
-                    # value.position.x = state["pose"]["position"]["x"]
-                    # value.position.y = state["pose"]["position"]["y"]
-                    # value.position.z = state["pose"]["position"]["z"]
-                    # value.orientation.x = state["pose"]["orientation"]["x"]
-                    # value.orientation.y = state["pose"]["orientation"]["y"]
-                    # value.orientation.z = state["pose"]["orientation"]["z"]
-                    # value.orientation.w = state["pose"]["orientation"]["w"]
+                if state["type"] == XR_ACTION_TYPE_POSE_INPUT and state["isActive"]:
                     value = ((state["pose"]["position"]["x"], state["pose"]["position"]["y"], state["pose"]["position"]["z"]),
                              (state["pose"]["orientation"]["x"], state["pose"]["orientation"]["y"], state["pose"]["orientation"]["z"], state["pose"]["orientation"]["w"]))
                     self._callback_action_events[state["path"]](state["path"], value)
             return result[0]
-
+    
     # action utilities
 
-    def subscribe_action_event(self, binding: str, action_type: Union[int, None] = None, callback=None) -> bool:
-        if action_type is None:
-            if binding.split("/")[-1] in ["click", "touch"]:
-                action_type = self.XR_ACTION_TYPE_BOOLEAN_INPUT
-            elif binding.split("/")[-1] in ["value", "force"]:
-                action_type = self.XR_ACTION_TYPE_FLOAT_INPUT
-            elif binding.split("/")[-1] in ["x", "y"]:
-                action_type = self.XR_ACTION_TYPE_VECTOR2F_INPUT
-            elif binding.split("/")[-1] in ["pose"]:
-                action_type = self.XR_ACTION_TYPE_POSE_INPUT
-            elif binding.split("/")[-1] in ["haptic", "haptic_left", "haptic_right", "haptic_left_trigger", "haptic_right_trigger"]:
-                action_type = self.XR_ACTION_TYPE_VIBRATION_OUTPUT
-            else:
-                raise ValueError("The action type cannot be retrieved from the path {}".format(binding))
+    def subscribe_action_event(self, path: str, callback: Union[Callable[[str, object], None], None] = None, action_type: Union[int, None] = None, reference_space: Union[int, None] = 2) -> bool:
+        """
+        Create an action given a path and subscribe a callback function to the update event of this action
+
+        If action_type is None the action type will be automatically defined by parsing the last segment of the path according to the following policy:
+        - XR_ACTION_TYPE_BOOLEAN_INPUT: /click, /touch
+        - XR_ACTION_TYPE_FLOAT_INPUT: /value, /force
+        - XR_ACTION_TYPE_VECTOR2F_INPUT: /x, /y
+        - XR_ACTION_TYPE_POSE_INPUT: /pose
+        - XR_ACTION_TYPE_VIBRATION_OUTPUT: /haptic, /haptic_left, /haptic_right, /haptic_left_trigger, /haptic_right_trigger
+
+        The callback function (a callable object) should have only the following 2 parameters:
+        - path: str
+           The complete path (user path and subpath) of the action that invokes the callback
+        - value: bool, float, tuple(float, float), tuple(tuple(float, float, float), tuple(float, float, float, float))
+           The current state of the action according to its type
+           - XR_ACTION_TYPE_BOOLEAN_INPUT: bool
+           - XR_ACTION_TYPE_FLOAT_INPUT: float 
+           - XR_ACTION_TYPE_VECTOR2F_INPUT (x, y): tuple(float, float)
+           - XR_ACTION_TYPE_POSE_INPUT (cartesian position (x,y,z), rotation as quaternion (x,y,z,w)): tuple(tuple(float, float, float), tuple(float, float, float, float))
+
+        XR_ACTION_TYPE_VIBRATION_OUTPUT actions will not invoke their callback function. In this case the callback must be None
+        XR_ACTION_TYPE_POSE_INPUT also specifies, through the definition of the reference_space parameter, the reference space used to retrieve the pose
+
+        OpenXR internal function calls:
+        - xrCreateAction
         
-        if callback is None:
+        Parameters
+        ----------
+        path: str
+            Complete [path](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#semantic-path-reserved) (user path and subpath) referring to the action
+        callback: callable object (2 parameters) or None for XR_ACTION_TYPE_VIBRATION_OUTPUT
+            Callback invoked when the state of the action changes
+        action_type: {XR_ACTION_TYPE_BOOLEAN_INPUT, XR_ACTION_TYPE_FLOAT_INPUT, XR_ACTION_TYPE_VECTOR2F_INPUT, XR_ACTION_TYPE_POSE_INPUT, XR_ACTION_TYPE_VIBRATION_OUTPUT} or None, optional
+            Action [type](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrActionType) from XrActionType enum (default: None)
+        reference_space: {XR_REFERENCE_SPACE_TYPE_VIEW, XR_REFERENCE_SPACE_TYPE_LOCAL, XR_REFERENCE_SPACE_TYPE_STAGE}, optional
+            Desired [reference space](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#reference-spaces) type from XrReferenceSpaceType enum used to retrieve the pose (default: XR_REFERENCE_SPACE_TYPE_LOCAL)
+
+        Returns
+        -------
+        bool
+            True if there is no error during action creation, otherwise False
+        """
+        if action_type is None:
+            if path.split("/")[-1] in ["click", "touch"]:
+                action_type = XR_ACTION_TYPE_BOOLEAN_INPUT
+            elif path.split("/")[-1] in ["value", "force"]:
+                action_type = XR_ACTION_TYPE_FLOAT_INPUT
+            elif path.split("/")[-1] in ["x", "y"]:
+                action_type = XR_ACTION_TYPE_VECTOR2F_INPUT
+            elif path.split("/")[-1] in ["pose"]:
+                action_type = XR_ACTION_TYPE_POSE_INPUT
+            elif path.split("/")[-1] in ["haptic", "haptic_left", "haptic_right", "haptic_left_trigger", "haptic_right_trigger"]:
+                action_type = XR_ACTION_TYPE_VIBRATION_OUTPUT
+            else:
+                raise ValueError("The action type cannot be retrieved from the path {}".format(path))
+        
+        if callback is None and action_type != XR_ACTION_TYPE_VIBRATION_OUTPUT:
             raise ValueError("The callback was not defined")
-        self._callback_action_events[binding] = callback
-        if action_type == self.XR_ACTION_TYPE_POSE_INPUT:
-            self._callback_action_pose_events[binding] = callback
+        self._callback_action_events[path] = callback
+        if action_type == XR_ACTION_TYPE_POSE_INPUT:
+            self._callback_action_pose_events[path] = callback
         
         if self._use_ctypes:
-            return bool(self._lib.addAction(self._app, ctypes.create_string_buffer(binding.encode('utf-8')), action_type))
+            return bool(self._lib.addAction(self._app, ctypes.create_string_buffer(path.encode('utf-8')), action_type, reference_space))
         else:
-            return self._app.addAction(binding, action_type)
+            return self._app.addAction(path, action_type, reference_space)
 
-    def apply_haptic_feedback(self, binding: str, haptic_feedback: dict = {}):
+    def apply_haptic_feedback(self, path: str, haptic_feedback: dict = {}) -> bool:
+        """
+        Apply a [haptic feedback](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_output_actions_and_haptics) to a device defined by a path (user path and subpath)
+
+        OpenXR internal function calls:
+        - xrApplyHapticFeedback
+
+        Parameters
+        ----------
+        path: str
+            Complete [path](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#semantic-path-reserved) (user path and subpath) referring to the action
+        haptic_feedback: dict
+            A python dictionary containing the field names and value of a XrHapticBaseHeader-based structure.
+            Note: At the moment the only haptics type supported is the unextended OpenXR [XrHapticVibration](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrHapticVibration)
+
+        Returns
+        -------
+        bool
+            True if there is no error during the haptic feedback application, otherwise False
+        """
         amplitude = haptic_feedback.get("amplitude", 0.5)
-        duration = haptic_feedback.get("duration", self.XR_MIN_HAPTIC_DURATION)
-        frequency = haptic_feedback.get("frequency", self.XR_FREQUENCY_UNSPECIFIED)
+        duration = haptic_feedback.get("duration", XR_MIN_HAPTIC_DURATION)
+        frequency = haptic_feedback.get("frequency", XR_FREQUENCY_UNSPECIFIED)
         if self._use_ctypes:
             amplitude = ctypes.c_float(amplitude)
             duration = ctypes.c_int64(duration)
             frequency = ctypes.c_float(frequency)
-            return bool(self._lib.applyHapticFeedback(self._app, ctypes.create_string_buffer(binding.encode('utf-8')), amplitude, duration, frequency))
+            return bool(self._lib.applyHapticFeedback(self._app, ctypes.create_string_buffer(path.encode('utf-8')), amplitude, duration, frequency))
         else:
-            return self._app.applyHapticFeedback(binding, amplitude, duration, frequency)
+            return self._app.applyHapticFeedback(path, amplitude, duration, frequency)
 
-    def stop_haptic_feedback(self, binding: str):
+    def stop_haptic_feedback(self, path: str) -> bool:
+        """
+        Stop a [haptic feedback](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_output_actions_and_haptics) applied to a device defined by a path (user path and subpath)
+
+        OpenXR internal function calls:
+        - xrStopHapticFeedback
+
+        Parameters
+        ----------
+        path: str
+            Complete [path](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#semantic-path-reserved) (user path and subpath) referring to the action
+
+        Returns
+        -------
+        bool
+            True if there is no error during the haptic feedback stop, otherwise False
+        """
         if self._use_ctypes:
-            return bool(self._lib.stopHapticFeedback(self._app, ctypes.create_string_buffer(binding.encode('utf-8'))))
+            return bool(self._lib.stopHapticFeedback(self._app, ctypes.create_string_buffer(path.encode('utf-8'))))
         else:
-            return self._app.stopHapticFeedback(binding)
+            return self._app.stopHapticFeedback(path)
 
     # view utilities
 
-    def setup_mono_view(self, camera: Union[str, pxr.Usd.Prim, pxr.Sdf.Path] = "/OpenXR/Cameras/camera") -> None:
+    def setup_mono_view(self, camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/camera") -> None:
+        """
+        Setup Omniverse viewport and camera for monoscopic rendering
+
+        This method obtains the viewport window for the given camera. If the viewport window does not exist, a new one is created and the camera is set as active. If the given camera does not exist, a new camera is created with the same path and set to the recommended resolution of the display device
+        
+        Parameters
+        ----------
+        camera: str, pxr.Sdf.Path or pxr.Usd.Prim, optional
+            Omniverse camera prim or path (default: '/OpenXR/Cameras/camera')
+        """
         self.setup_stereo_view(camera, None)
 
-    def setup_stereo_view(self, left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Usd.Prim, pxr.Sdf.Path, None] = "/OpenXR/Cameras/right_camera") -> None:
+    def setup_stereo_view(self, left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim, None] = "/OpenXR/Cameras/right_camera") -> None:
+        """
+        Setup Omniverse viewports and cameras for stereoscopic rendering
+
+        This method obtains the viewport window for each camera. If the viewport window does not exist, a new one is created and the camera is set as active. If the given cameras do not exist, new cameras are created with the same path and set to the recommended resolution of the display device
+        
+        Parameters
+        ----------
+        left_camera: str, pxr.Sdf.Path or pxr.Usd.Prim, optional
+            Omniverse left camera prim or path (default: '/OpenXR/Cameras/left_camera')
+        right_camera: str, pxr.Sdf.Path or pxr.Usd.Prim, optional
+            Omniverse right camera prim or path (default: '/OpenXR/Cameras/right_camera')
+        """
         def get_or_create_vieport_window(camera, teleport=True, window_size=(400, 300), resolution=(1280, 720)):
             window = None
             camera = str(camera.GetPath() if type(camera) is Usd.Prim else camera)
@@ -443,8 +690,16 @@ class OpenXR:
         if len(resolutions) == 2 and self._viewport_window_right is not None:
             self._viewport_window_right.set_texture_resolution(*resolutions[1])
 
-    def get_recommended_resolutions(self) -> list:
-        # View index 0 must represent the left eye and view index 1 must represent the right eye
+    def get_recommended_resolutions(self) -> tuple:
+        """
+        Get the recommended resolution of the display device
+        
+        Returns
+        -------
+        tuple
+            Tuple containing the recommended resolutions (width, height) of each device view.
+            If the tuple length is 2, index 0 represents the left eye and index 1 represents the right eye
+        """
         if self._use_ctypes:
             num_views = self._lib.getViewConfigurationViewsSize(self._app)
             views = (XrViewConfigurationView * num_views)()
@@ -453,9 +708,21 @@ class OpenXR:
             else:
                 return []
         else:
-            return [(view["recommendedImageRectWidth"], view["recommendedImageRectHeight"]) for view in self._app.getViewConfigurationViews()]
+            return tuple([(view["recommendedImageRectWidth"], view["recommendedImageRectHeight"]) for view in self._app.getViewConfigurationViews()])
 
     def set_stereo_rectification(self, x: float = 0, y: float = 0, z: float = 0) -> None:
+        """
+        Set the angle (in radians) of the rotation axes for stereoscopic view rectification
+
+        Parameters
+        ----------
+        x: float, optional
+            Angle (in radians) of the X-axis (default: 0)
+        y: float, optional
+            Angle (in radians) of the Y-axis (default: 0)
+        x: float, optional
+            Angle (in radians) of the Z-axis (default: 0)
+        """
         self._rectification_quat_left = pxr.Gf.Quatd(1, 0, 0, 0)
         self._rectification_quat_right = pxr.Gf.Quatd(1, 0, 0, 0)
         if x:   # w,x,y,z = cos(a/2), sin(a/2), 0, 0
@@ -468,11 +735,35 @@ class OpenXR:
             self._rectification_quat_left *= pxr.Gf.Quatd(np.cos(z/2), 0, 0, np.sin(z/2))
             self._rectification_quat_right *= pxr.Gf.Quatd(np.cos(-z/2), 0, 0, np.sin(-z/2))
 
-    def set_frame_transformations(self, fit: bool = True, flip: Union[int, tuple, None] = None) -> None:
+    def set_frame_transformations(self, fit: bool = False, flip: Union[int, tuple, None] = None) -> None:
+        """
+        Specify the transformations to be applied to the rendered images
+
+        Parameters
+        ----------
+        fit: bool, optionl
+            Adjust each rendered image to the recommended resolution of the display device by cropping and scaling the image from its center (default: False)
+            OpenCV.resize method with INTER_LINEAR interpolation will be used to scale the image to the recommended resolution
+        flip: int, tuple or None, optionl
+            Flips each image around vertical (0), horizontal (1), or both axes (0,1) (default: None) 
+        """
         self._transform_fit = fit
         self._transform_flip = flip
 
-    def teleport_prim(self, prim, position: pxr.Gf.Vec3d, rotation: Union[pxr.Gf.Quatd, pxr.Gf.Vec3d]) -> None:
+    def teleport_prim(self, prim: pxr.Usd.Prim, position: pxr.Gf.Vec3d, rotation: pxr.Gf.Quatd) -> None:
+        """
+        Teleport the prim specified by the given transformation (position and rotation)
+
+        Parameters
+        ----------
+        prim: pxr.Usd.Prim
+            Target prim
+        position: pxr.Gf.Vec3d
+            Cartesian position (in centimeters) used to transform the prim
+        rotation: pxr.Gf.Quatd
+            Rotation (as quaternion) used to transform the prim
+        """
+        # TODO: specify the base position and translation when camera is configured (setup_mono/stereo_view)
         properties = prim.GetPropertyNames()
         translated, rotated = False, False
         # translate
@@ -481,9 +772,8 @@ class OpenXR:
             translated = True
         # rotate
         if "xformOp:rotate" in properties:
-            prim.GetAttribute("xformOp:rotate").Set(Gf.Rotation(rotation))
+            prim.GetAttribute("xformOp:rotate").Set(Gf.Vec3d(90, 0, 0))
         elif "xformOp:rotateXYZ" in properties:
-            # rotation = Gf.Matrix3d(rotation)
             prim.GetAttribute("xformOp:rotateXYZ").Set(Gf.Vec3d(90, 0, 0))
         
         mat = Gf.Matrix4d()
@@ -630,8 +920,8 @@ if __name__ == "__main__":
             _xr.subscribe_action_event("/user/hand/left/input/menu/click", callback=callback_action)
             _xr.subscribe_action_event("/user/hand/right/input/menu/click", callback=callback_action)
 
-            _xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=callback_action_pose)
-            _xr.subscribe_action_event("/user/hand/right/input/grip/pose", callback=callback_action_pose)
+            _xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=callback_action_pose, reference_space=_xr.XR_REFERENCE_SPACE_TYPE_LOCAL)
+            _xr.subscribe_action_event("/user/hand/right/input/grip/pose", callback=callback_action_pose, reference_space=_xr.XR_REFERENCE_SPACE_TYPE_LOCAL)
 
             _xr.subscribe_action_event("/user/hand/left/output/haptic", callback=callback_action)
             _xr.subscribe_action_event("/user/hand/right/output/haptic", callback=callback_action)
