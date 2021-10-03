@@ -64,17 +64,17 @@ struct ActionState{
   	XrActionType type;
 	const char * path;
 	bool isActive;
-    bool stateBool;
-    float stateFloat;
-    float stateVectorX;
-    float stateVectorY;
+    bool stateBool;			// XR_TYPE_ACTION_STATE_BOOLEAN
+    float stateFloat;		// XR_TYPE_ACTION_STATE_FLOAT
+    float stateVectorX;		// XR_TYPE_ACTION_STATE_VECTOR2F
+    float stateVectorY;		// XR_TYPE_ACTION_STATE_VECTOR2F
 };
 
 struct ActionPoseState{
   	XrActionType type;
 	const char * path;
 	bool isActive;
-    XrPosef pose;
+	XrPosef pose;			// XR_TYPE_ACTION_STATE_POSE
 };
 
 struct SwapchainHandler{
@@ -90,6 +90,7 @@ struct SwapchainHandler{
 #endif
 };
 
+
 vector<const char*> cast_to_vector_char_p(const vector<string> & input_list){
 	vector<const char*> output_list;
 	for (size_t i = 0; i < input_list.size(); i++)
@@ -97,7 +98,7 @@ vector<const char*> cast_to_vector_char_p(const vector<string> & input_list){
 	return output_list;
 }
 
-bool xrCheckResult(XrInstance xr_instance, XrResult xr_result, string message = ""){
+bool xrCheckResult(const XrInstance & xr_instance, const XrResult & xr_result, const string & message = ""){
 	if(XR_SUCCEEDED(xr_result))
 		return true;
 
@@ -105,15 +106,15 @@ bool xrCheckResult(XrInstance xr_instance, XrResult xr_result, string message = 
 		char xr_result_as_string[XR_MAX_RESULT_STRING_SIZE];
 		xrResultToString(xr_instance, xr_result, xr_result_as_string);
 		if(!message.empty())
-			std::cout << "FAILED with code: " << xr_result << " (" << xr_result_as_string << "). " << message << std::endl;
+			std::cout << "[ERROR] " << message << " failed with code: " << xr_result << " (" << xr_result_as_string << "). " << message << std::endl;
 		else
-			std::cout << "FAILED with code: " << xr_result << " (" << xr_result_as_string << ")" << std::endl;
+			std::cout << "[ERROR] code: " << xr_result << " (" << xr_result_as_string << ")" << std::endl;
 	}
 	else{
 		if(!message.empty())
-			std::cout << "FAILED with code: " << xr_result << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#return-codes). " << message << std::endl;
+			std::cout << "[ERROR] " << message << " failed with code: " << xr_result << " (" << _enum_to_string(xr_result) << ")" << std::endl;
 		else
-			std::cout << "FAILED with code: " << xr_result << " (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#return-codes)" << std::endl;
+			std::cout << "[ERROR] code: " << xr_result << " (" << _enum_to_string(xr_result) << ")" << std::endl;
 	}
 	return false;
 }
@@ -732,10 +733,10 @@ private:
 	vector<SwapchainHandler> xr_swapchains_handlers;
 	vector<XrViewConfigurationView> xr_view_configuration_views;
 
-	bool framesRGBA;
-	vector<int> framesWidth;
-	vector<int> framesHeight;
-	vector<void*> framesData;
+	bool xr_frames_is_rgba;
+	vector<int> xr_frames_width;
+	vector<int> xr_frames_height;
+	vector<void*> xr_frames_data;
 	void (*renderCallback)(int, XrView*, XrViewConfigurationView*);
 	function<void(int, vector<XrView>, vector<XrViewConfigurationView>)> renderCallbackFunction;
 
@@ -760,7 +761,7 @@ private:
 	bool acquireInstanceProperties();
 	bool acquireSystemProperties();
 	bool acquireBlendModes(XrEnvironmentBlendMode);
-	bool acquireViewConfiguration(XrViewConfigurationType);	
+	bool acquireViewConfiguration(XrViewConfigurationType);
 
 	bool defineReferenceSpaces();
 	bool defineSessionSpaces();
@@ -768,10 +769,10 @@ private:
 
 	void defineInteractionProfileBindings(vector<XrActionSuggestedBinding> &, vector<string>);
 	void cleanFrames(){
-		// for(size_t i = 0; i < framesData.size(); i++){
-		// 	framesData[i] = nullptr;
-		// 	framesWidth[i] = 0;
-		// 	framesHeight[i] = 0;
+		// for(size_t i = 0; i < xr_frames_data.size(); i++){
+		// 	xr_frames_data[i] = nullptr;
+		// 	xr_frames_width[i] = 0;
+		// 	xr_frames_height[i] = 0;
 		// }
 	};
 
@@ -1007,9 +1008,9 @@ bool OpenXrApplication::acquireViewConfiguration(XrViewConfigurationType configu
 	}
 
 	// resize frame buffers
-	framesData.resize(xr_view_configuration_views.size());
-	framesWidth.resize(xr_view_configuration_views.size());
-	framesHeight.resize(xr_view_configuration_views.size());
+	xr_frames_data.resize(xr_view_configuration_views.size());
+	xr_frames_width.resize(xr_view_configuration_views.size());
+	xr_frames_height.resize(xr_view_configuration_views.size());
 	cleanFrames();
 
 	return true;
@@ -2101,11 +2102,11 @@ bool OpenXrApplication::renderViews(XrReferenceSpaceType referenceSpaceType, vec
 			projectionLayerViews[i].subImage.imageRect.extent = {viewSwapchain.width, viewSwapchain.height};
 
 			// render frame
-			if((renderCallback || renderCallbackFunction) && (framesWidth[i] && framesHeight[i])){
+			if((renderCallback || renderCallbackFunction) && (xr_frames_width[i] && xr_frames_height[i])){
 				const XrSwapchainImageBaseHeader* const swapchainImage = (XrSwapchainImageBaseHeader*)&viewSwapchain.images[swapchainImageIndex];
 				// FIXME: use format (vulkan: 43, opengl: 34842)
 				// xr_graphics_handler.renderView(projectionLayerViews[i], swapchainImage, 43);
-				xr_graphics_handler.renderViewFromImage(projectionLayerViews[i], swapchainImage, 43, framesWidth[i], framesHeight[i], framesData[i], framesRGBA);
+				xr_graphics_handler.renderViewFromImage(projectionLayerViews[i], swapchainImage, 43, xr_frames_width[i], xr_frames_height[i], xr_frames_data[i], xr_frames_is_rgba);
 				cleanFrames();
 			}
 
@@ -2142,12 +2143,12 @@ bool OpenXrApplication::renderViews(XrReferenceSpaceType referenceSpaceType, vec
 }
 
 bool OpenXrApplication::setFrameByIndex(int index, int width, int height, void * frame, bool rgba){
-	if(index < 0 || (size_t)index >= framesData.size())
+	if(index < 0 || (size_t)index >= xr_frames_data.size())
 		return false;
-	framesWidth[index] = width;
-	framesHeight[index] = height;
-	framesData[index] = frame;
-	framesRGBA = rgba;
+	xr_frames_width[index] = width;
+	xr_frames_height[index] = height;
+	xr_frames_data[index] = frame;
+	xr_frames_is_rgba = rgba;
 	return true;
 }
 
@@ -2214,7 +2215,24 @@ int main(){
 extern "C"
 {
     OpenXrApplication * openXrApplication(){ return new OpenXrApplication(); }
-    
+
+	// utils
+    bool isSessionRunning(OpenXrApplication * app){ 
+		return app->isSessionRunning(); 
+	}
+	bool getViewConfigurationViews(OpenXrApplication * app, XrViewConfigurationView * views, int viewsLength){
+		if((size_t)viewsLength != app->getViewConfigurationViewsSize())
+			return false;
+		vector<XrViewConfigurationView> viewConfigurationView = app->getViewConfigurationViews();
+		for(size_t i = 0; i < viewConfigurationView.size(); i++)
+			views[i] = viewConfigurationView[i];
+		return true;
+	}
+	int getViewConfigurationViewsSize(OpenXrApplication * app){ 
+		return app->getViewConfigurationViewsSize(); 
+	}
+
+    // setup app
 	bool createInstance(OpenXrApplication * app, const char * applicationName, const char * engineName, const char ** apiLayers, int apiLayersLength, const char ** extensions, int extensionsLength){
 		vector<string> requestedApiLayers;
 		for(int i = 0; i < apiLayersLength; i++)
@@ -2227,23 +2245,29 @@ extern "C"
     bool getSystem(OpenXrApplication * app, int formFactor, int blendMode, int configurationType){ 
 		return app->getSystem(XrFormFactor(formFactor), XrEnvironmentBlendMode(blendMode), XrViewConfigurationType(configurationType)); 
 	}
-	bool addAction(OpenXrApplication * app, const char * stringPath, int actionType){ return app->addAction(stringPath, XrActionType(actionType)); }
+    bool createSession(OpenXrApplication * app){ 
+		return app->createSession(); 
+	}
 
+	// actions
+	bool addAction(OpenXrApplication * app, const char * stringPath, int actionType){ 
+		return app->addAction(stringPath, XrActionType(actionType)); 
+	}
 	bool applyHapticFeedback(OpenXrApplication * app, const char * stringPath, float amplitude, int64_t duration, float frequency){ 
 		XrHapticVibration vibration = {XR_TYPE_HAPTIC_VIBRATION};
 		vibration.amplitude = amplitude;
-		vibration.duration = duration;
+		vibration.duration = XrDuration(duration);
 		vibration.frequency = frequency;
 		return app->applyHapticFeedback(stringPath, (XrHapticBaseHeader*)&vibration); 
 	}
+	bool stopHapticFeedback(OpenXrApplication * app, const char * stringPath){ 
+		return app->stopHapticFeedback(stringPath); 
+	}
 
-	bool stopHapticFeedback(OpenXrApplication * app, const char * stringPath){ return app->stopHapticFeedback(stringPath); }
-
-    bool createSession(OpenXrApplication * app){ return app->createSession(); }
-
-    bool pollEvents(OpenXrApplication * app, bool * exitLoop){ return app->pollEvents(exitLoop); }
-    bool isSessionRunning(OpenXrApplication * app){ return app->isSessionRunning(); }
-
+    // poll data
+	bool pollEvents(OpenXrApplication * app, bool * exitLoop){ 
+		return app->pollEvents(exitLoop); 
+	}
     bool pollActions(OpenXrApplication * app, ActionState * actionStates, int actionStatesLength){
 		vector<ActionState> requestedActionStates;
 		bool status = app->pollActions(requestedActionStates);
@@ -2252,6 +2276,8 @@ extern "C"
 				actionStates[i] = requestedActionStates[i];
 		return status;
 	}
+
+	// render
     bool renderViews(OpenXrApplication * app, int referenceSpaceType, ActionPoseState * actionPoseStates, int actionPoseStatesLength){ 
 		vector<ActionPoseState> requestedActionPoseStates;
 		bool status = app->renderViews(XrReferenceSpaceType(referenceSpaceType), requestedActionPoseStates);
@@ -2261,6 +2287,10 @@ extern "C"
 		return status;
 	}
 
+	// render utilities
+	void setRenderCallback(OpenXrApplication * app, void (*callback)(int, XrView*, XrViewConfigurationView*)){ 
+		app->setRenderCallbackFromPointer(callback); 
+	}
 	bool setFrames(OpenXrApplication * app, int leftWidth, int leftHeight, void * leftData, int rightWidth, int rightHeight, void * rightData, bool rgba){
 		if(app->getViewConfigurationViewsSize() == 1)
 			return app->setFrameByIndex(0, leftWidth, leftHeight, leftData, rgba);
@@ -2269,18 +2299,6 @@ extern "C"
 			return status && app->setFrameByIndex(1, rightWidth, rightHeight, rightData, rgba);
 		}
 		return false;
-	}
-
-	void setRenderCallback(OpenXrApplication * app, void (*callback)(int, XrView*, XrViewConfigurationView*)){ app->setRenderCallbackFromPointer(callback); }
-
-	int getViewConfigurationViewsSize(OpenXrApplication * app){ return app->getViewConfigurationViewsSize(); }
-	bool getViewConfigurationViews(OpenXrApplication * app, XrViewConfigurationView * views, int viewsLength){
-		if((size_t)viewsLength != app->getViewConfigurationViewsSize())
-			return false;
-		vector<XrViewConfigurationView> viewConfigurationView = app->getViewConfigurationViews();
-		for(size_t i = 0; i < viewConfigurationView.size(); i++)
-			views[i] = viewConfigurationView[i];
-		return true;
 	}
 }
 #endif
