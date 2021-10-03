@@ -265,6 +265,8 @@ class OpenXR:
 
             for state in requested_action_states:
                 value = None
+                if not state.type:
+                    break
                 if state.type == self.XR_ACTION_TYPE_BOOLEAN_INPUT:
                     value = state.stateBool
                 elif state.type == self.XR_ACTION_TYPE_FLOAT_INPUT:
@@ -336,7 +338,6 @@ class OpenXR:
 
     def subscribe_action_event(self, binding: str, action_type: Union[int, None] = None, callback=None) -> bool:
         if action_type is None:
-            print(binding.split("/")[-1])
             if binding.split("/")[-1] in ["click", "touch"]:
                 action_type = self.XR_ACTION_TYPE_BOOLEAN_INPUT
             elif binding.split("/")[-1] in ["value", "force"]:
@@ -361,11 +362,17 @@ class OpenXR:
         else:
             return self._app.addAction(binding, action_type)
 
-    def apply_haptic_feedback(self, binding: str, haptic_feedback: dict = {"amplitude": 0.5, "duration": -1, "frequency": 0}):
+    def apply_haptic_feedback(self, binding: str, haptic_feedback: dict = {}):
+        amplitude = haptic_feedback.get("amplitude", 0.5)
+        duration = haptic_feedback.get("duration", self.XR_MIN_HAPTIC_DURATION)
+        frequency = haptic_feedback.get("frequency", self.XR_FREQUENCY_UNSPECIFIED)
         if self._use_ctypes:
-            return bool(self._lib.applyHapticFeedback(self._app, ctypes.create_string_buffer(binding.encode('utf-8')), haptic_feedback["amplitude"], haptic_feedback["duration"], haptic_feedback["frequency"]))
+            amplitude = ctypes.c_float(amplitude)
+            duration = ctypes.c_int64(duration)
+            frequency = ctypes.c_float(frequency)
+            return bool(self._lib.applyHapticFeedback(self._app, ctypes.create_string_buffer(binding.encode('utf-8')), amplitude, duration, frequency))
         else:
-            return self._app.applyHapticFeedback(binding, haptic_feedback["amplitude"], haptic_feedback["duration"], haptic_feedback["frequency"])
+            return self._app.applyHapticFeedback(binding, amplitude, duration, frequency)
 
     def stop_haptic_feedback(self, binding: str):
         if self._use_ctypes:
@@ -603,9 +610,15 @@ if __name__ == "__main__":
     ready = False
     end = False
 
-    def callback_action(path, value):
+    def callback_action_pose(path, value):
         return
         print(path, value)
+
+    def callback_action(path, value):
+        if path in ["/user/hand/left/input/menu/click", "/user/hand/right/input/menu/click"]:
+            # print(path, value)
+            print(_xr.apply_haptic_feedback("/user/hand/left/output/haptic", {"duration": 1000000}))
+            print(_xr.apply_haptic_feedback("/user/hand/right/output/haptic", {"duration": 1000000}))
 
     if _xr.create_instance():
         if _xr.get_system():
@@ -617,8 +630,11 @@ if __name__ == "__main__":
             _xr.subscribe_action_event("/user/hand/left/input/menu/click", callback=callback_action)
             _xr.subscribe_action_event("/user/hand/right/input/menu/click", callback=callback_action)
 
-            _xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=callback_action)
-            _xr.subscribe_action_event("/user/hand/right/input/grip/pose", callback=callback_action)
+            _xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=callback_action_pose)
+            _xr.subscribe_action_event("/user/hand/right/input/grip/pose", callback=callback_action_pose)
+
+            _xr.subscribe_action_event("/user/hand/left/output/haptic", callback=callback_action)
+            _xr.subscribe_action_event("/user/hand/right/output/haptic", callback=callback_action)
             if _xr.create_session():
                 ready = True
             else:
