@@ -16,8 +16,8 @@ if __name__ != "__main__":
 else:
     class pxr:
         class Gf:
-            Vec3d = None
-            Quatd = lambda w,x,y,z: None
+            Vec3d = lambda x,y,z: (x,y,z)
+            Quatd = lambda w,x,y,z: (w,x,y,z)
         class Usd:
             Prim = None
         class UsdGeom:
@@ -44,9 +44,9 @@ XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND = 3
 XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO = 1
 XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO = 2
 
-XR_REFERENCE_SPACE_TYPE_VIEW = 1
-XR_REFERENCE_SPACE_TYPE_LOCAL = 2
-XR_REFERENCE_SPACE_TYPE_STAGE = 3
+XR_REFERENCE_SPACE_TYPE_VIEW = 1    # +Y up, +X to the right, and -Z forward
+XR_REFERENCE_SPACE_TYPE_LOCAL = 2   # +Y up, +X to the right, and -Z forward
+XR_REFERENCE_SPACE_TYPE_STAGE = 3   # +Y up, and the X and Z axes aligned with the rectangle edges
 
 XR_ACTION_TYPE_BOOLEAN_INPUT = 1
 XR_ACTION_TYPE_FLOAT_INPUT = 2
@@ -142,7 +142,8 @@ class OpenXR:
         # callbacks
         self._callback_action_events = {}
         self._callback_action_pose_events = {}
-        self._callback_render_event = None
+        self._callback_middle_render = None
+        self._callback_render = None
 
     def init(self, graphics: str = "OpenGL", use_ctypes: bool = False) -> bool:
         """
@@ -459,7 +460,7 @@ class OpenXR:
         bool
             True if there is no error during rendering, otherwise False
         """
-        if self._callback_render_event is None:
+        if self._callback_render is None:
             print("[WARNING] No callback has been established for rendering events. Internal callback will be used")
             self.subscribe_render_event()
 
@@ -470,9 +471,9 @@ class OpenXR:
             for state in requested_action_pose_states:
                 value = None
                 if state.type == XR_ACTION_TYPE_POSE_INPUT and state.isActive:
-                    value = (Gf.Vec3d(state.pose.position.x, state.pose.position.y, state.pose.position.z),
+                    value = (Gf.Vec3d(state.pose.position.x, -state.pose.position.z, state.pose.position.y),
                              Gf.Quatd(state.pose.orientation.w, state.pose.orientation.x, state.pose.orientation.y, state.pose.orientation.z))
-                    self._callback_action_events[state.path.decode("utf-8")](state.path.decode("utf-8"), value)
+                    self._callback_action_pose_events[state.path.decode("utf-8")](state.path.decode("utf-8"), value)
             return result
 
         else:
@@ -481,9 +482,9 @@ class OpenXR:
             for state in result[1]:
                 value = None
                 if state["type"] == XR_ACTION_TYPE_POSE_INPUT and state["isActive"]:
-                    value = (Gf.Vec3d(state["pose"]["position"]["x"], state["pose"]["position"]["y"], state["pose"]["position"]["z"]),
+                    value = (Gf.Vec3d(state["pose"]["position"]["x"], -state["pose"]["position"]["z"], state["pose"]["position"]["y"]),
                              Gf.Quatd(state["pose"]["orientation"]["w"], state["pose"]["orientation"]["x"], state["pose"]["orientation"]["y"], state["pose"]["orientation"]["z"]))
-                    self._callback_action_events[state["path"]](state["path"], value)
+                    self._callback_action_pose_events[state["path"]](state["path"], value)
             return result[0]
     
     # action utilities
@@ -793,22 +794,50 @@ class OpenXR:
         reference_rotation: pxr.Gf.Vec3d or None, optional
             Rotation (in degress) on each axis used as reference (default: None)
         """
+        # TODO: specify the base position and translation when camera is configured (setup_mono/stereo_view)
         properties = prim.GetPropertyNames()
+        translated, rotated = False, False
+        # translate
+        if "xformOp:translate" in properties or "xformOp:translation" in properties:
+            prim.GetAttribute("xformOp:translate").Set(position)
+            translated = True
+        # rotate
+        if "xformOp:rotate" in properties:
+            prim.GetAttribute("xformOp:rotate").Set(Gf.Vec3d(90, 0, 0))
+        elif "xformOp:rotateXYZ" in properties:
+            prim.GetAttribute("xformOp:rotateXYZ").Set(Gf.Vec3d(90, 0, 0))
+        
+        mat = Gf.Matrix4d()
+        mat.SetIdentity()
+        if not translated:
+            mat.SetTranslateOnly(position)
+        if not rotated:
+            mat.SetRotateOnly(Gf.Rotation(rotation))
+        if "xformOp:transform" in properties:
+            prim.GetAttribute("xformOp:transform").Set(mat)
+        else:
+            print("Create")
+            UsdGeom.Xformable(prim).AddXformOp(UsdGeom.XformOp.TypeTransform, UsdGeom.XformOp.PrecisionDouble, "").Set(mat)
+        return
+        properties = prim.GetPropertyNames()
+        translated, rotated = False, False
         # reference position
-        if reference_position is not None:
-            if "xformOp:translate" in properties or "xformOp:translation" in properties:
-                prim.GetAttribute("xformOp:translate").Set(position)
+        # if reference_position is not None:
+        if "xformOp:translate" in properties or "xformOp:translation" in properties:
+            prim.GetAttribute("xformOp:translate").Set(position)
+            translated = True
         # reference rotation
-        if reference_rotation is not None:
-            if "xformOp:rotate" in properties:
-                prim.GetAttribute("xformOp:rotate").Set(Gf.Vec3d(90, 0, 0))
-            elif "xformOp:rotateXYZ" in properties:
-                prim.GetAttribute("xformOp:rotateXYZ").Set(Gf.Vec3d(90, 0, 0))
+        # if reference_rotation is not None:
+        if "xformOp:rotate" in properties:
+            prim.GetAttribute("xformOp:rotate").Set(Gf.Vec3d(90,0,0))
+        elif "xformOp:rotateXYZ" in properties:
+            prim.GetAttribute("xformOp:rotateXYZ").Set(Gf.Vec3d(90,0,0))
         
         # transform
         mat = Gf.Matrix4d()
         mat.SetIdentity()
-        mat.SetTranslateOnly(position)
+        if not translated:
+            mat.SetTranslateOnly(position)
         mat.SetRotateOnly(Gf.Rotation(rotation))
         if "xformOp:transform" in properties:
             prim.GetAttribute("xformOp:transform").Set(mat)
@@ -839,37 +868,57 @@ class OpenXR:
         callback: callable object (3 parameters) or None, optional
             Callback invoked on each render event (default: None)
         """
-        # TODO: use structure to access views and configuration_views data for ctypes and pybind11
-        def _internal_callback(num_views, views, configuration_views):
-            # XR_REFERENCE_SPACE_TYPE_VIEW:  +Y up, +X to the right, and -Z forward
-            # XR_REFERENCE_SPACE_TYPE_LOCAL: +Y up, +X to the right, and -Z forward
-            # XR_REFERENCE_SPACE_TYPE_STAGE: +Y up, and the X and Z axes aligned with the rectangle edges
+        def _middle_callback(num_views, views, configuration_views):
+            _views = []
+            for v in views:
+                tmp = XrView()
+                tmp.type = v["type"]
+                tmp.next = None
+                tmp.pose = XrPosef()
+                tmp.pose.position.x = v["pose"]["position"]["x"]
+                tmp.pose.position.y = v["pose"]["position"]["y"]
+                tmp.pose.position.z = v["pose"]["position"]["z"]
+                tmp.pose.orientation.x = v["pose"]["orientation"]["x"]
+                tmp.pose.orientation.y = v["pose"]["orientation"]["y"]
+                tmp.pose.orientation.z = v["pose"]["orientation"]["z"]
+                tmp.pose.orientation.w = v["pose"]["orientation"]["w"]
+                tmp.fov = XrFovf()
+                tmp.fov.angleLeft = v["fov"]["angleLeft"]
+                tmp.fov.angleRight = v["fov"]["angleRight"]
+                tmp.fov.angleUp = v["fov"]["angleUp"]
+                tmp.fov.angleDown = v["fov"]["angleDown"]
+                _views.append(tmp)
+
+            _configuration_views = []
+            for v in configuration_views:
+                tmp = XrViewConfigurationView()
+                tmp.type = v["type"]
+                tmp.next = None
+                tmp.recommendedImageRectWidth = v["recommendedImageRectWidth"]
+                tmp.recommendedImageRectHeight = v["recommendedImageRectHeight"]
+                tmp.maxImageRectWidth = v["maxImageRectWidth"]
+                tmp.maxImageRectHeight = v["maxImageRectHeight"]
+                tmp.recommendedSwapchainSampleCount = v["recommendedSwapchainSampleCount"]
+                tmp.maxSwapchainSampleCount = v["maxSwapchainSampleCount"]
+                _configuration_views.append(tmp)
+
+            self._callback_render(num_views, _views, _configuration_views)
+
+        def _internal_render(num_views, views, configuration_views):
             # teleport left camera
-            if self._use_ctypes:
-                position = views[0].pose.position
-                rotation = views[0].pose.orientation
-                position = Gf.Vec3d(position.x, position.y, position.z)
-                rotation = Gf.Quatd(rotation.w, rotation.x, rotation.y, rotation.z)
-            else:
-                position = views[0]["pose"]["position"]
-                rotation = views[0]["pose"]["orientation"]
-                position = Gf.Vec3d(position["x"] * 100, -position["z"] * 100, position["y"] * 100)
-                rotation = Gf.Quatd(rotation["w"], rotation["x"], rotation["y"], rotation["z"])
-            self.teleport_prim(self._prim_left, position, self._rectification_quat_left * rotation, self._reference_position, self._reference_rotation)            
+            position = views[0].pose.position
+            rotation = views[0].pose.orientation
+            position = Gf.Vec3d(position.x, -position.z, position.y) * 100
+            rotation = Gf.Quatd(rotation.w, rotation.x, rotation.y, rotation.z) * self._rectification_quat_left
+            self.teleport_prim(self._prim_left, position, rotation, self._reference_position, self._reference_rotation)            
 
             # teleport right camera
             if num_views == 2:
-                if self._use_ctypes:
-                    position = views[1].pose.position
-                    rotation = views[1].pose.orientation
-                    position = Gf.Vec3d(position.x, position.y, position.z)
-                    rotation = Gf.Quatd(rotation.w, rotation.x, rotation.y, rotation.z)
-                else:
-                    position = views[1]["pose"]["position"]
-                    rotation = views[1]["pose"]["orientation"]
-                    position = Gf.Vec3d(position["x"] * 100, -position["z"] * 100, position["y"] * 100)
-                    rotation = Gf.Quatd(rotation["w"], rotation["x"], rotation["y"], rotation["z"])
-                self.teleport_prim(self._prim_right, position, self._rectification_quat_right * rotation, self._reference_position, self._reference_rotation)
+                position = views[1].pose.position
+                rotation = views[1].pose.orientation
+                position = Gf.Vec3d(position.x, -position.z, position.y) * 100
+                rotation = Gf.Quatd(rotation.w, rotation.x, rotation.y, rotation.z) * self._rectification_quat_right
+                self.teleport_prim(self._prim_right, position, rotation, self._reference_position, self._reference_rotation)
             
             # set frames
             try:
@@ -879,14 +928,16 @@ class OpenXR:
             except Exception as e:
                 print("[ERROR]", str(e))
         
+        self._callback_render = callback
         if callback is None:
-            callback = _internal_callback
+            self._callback_render = _internal_render
+        
         if self._use_ctypes:
-            self._callback_render_event = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.POINTER(XrView), ctypes.POINTER(XrViewConfigurationView))(callback)
-            self._lib.setRenderCallback(self._app, self._callback_render_event)
+            self._callback_middle_render = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.POINTER(XrView), ctypes.POINTER(XrViewConfigurationView))(self._callback_render)
+            self._lib.setRenderCallback(self._app, self._callback_middle_render)
         else:
-            self._callback_render_event = callback
-            self._app.setRenderCallback(self._callback_render_event)
+            self._callback_middle_render = _middle_callback
+            self._app.setRenderCallback(self._callback_middle_render)
 
     def set_frames(self, configuration_views: list, left: numpy.ndarray, right: numpy.ndarray = None) -> bool:
         """
@@ -941,12 +992,8 @@ class OpenXR:
         if self._transform_fit:
             transformed = True
             current_ratio = frame.shape[1] / frame.shape[0]
-            if self._use_ctypes:
-                recommended_ratio = configuration_view.recommendedImageRectWidth / configuration_view.recommendedImageRectHeight
-                recommended_size = (configuration_view.recommendedImageRectWidth, configuration_view.recommendedImageRectHeight)
-            else:
-                recommended_ratio = configuration_view["recommendedImageRectWidth"] / configuration_view["recommendedImageRectHeight"]
-                recommended_size = (configuration_view["recommendedImageRectWidth"], configuration_view["recommendedImageRectHeight"])
+            recommended_ratio = configuration_view.recommendedImageRectWidth / configuration_view.recommendedImageRectHeight
+            recommended_size = (configuration_view.recommendedImageRectWidth, configuration_view.recommendedImageRectHeight)
             if current_ratio > recommended_ratio:
                 m = int(abs(recommended_ratio * frame.shape[0] - frame.shape[1]) / 2)
                 frame = cv2.resize(frame[:, m:-m], recommended_size, interpolation=cv2.INTER_LINEAR)
@@ -974,8 +1021,8 @@ if __name__ == "__main__":
     end = False
 
     def callback_action_pose(path, value):
-        return
         print(path, value)
+        return
 
     def callback_action(path, value):
         if path in ["/user/hand/left/input/menu/click", "/user/hand/right/input/menu/click"]:
@@ -993,8 +1040,8 @@ if __name__ == "__main__":
             _xr.subscribe_action_event("/user/hand/left/input/menu/click", callback=callback_action)
             _xr.subscribe_action_event("/user/hand/right/input/menu/click", callback=callback_action)
 
-            _xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=callback_action_pose, reference_space=_xr.XR_REFERENCE_SPACE_TYPE_LOCAL)
-            _xr.subscribe_action_event("/user/hand/right/input/grip/pose", callback=callback_action_pose, reference_space=_xr.XR_REFERENCE_SPACE_TYPE_LOCAL)
+            _xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=callback_action_pose, reference_space=XR_REFERENCE_SPACE_TYPE_LOCAL)
+            _xr.subscribe_action_event("/user/hand/right/input/grip/pose", callback=callback_action_pose, reference_space=XR_REFERENCE_SPACE_TYPE_LOCAL)
 
             _xr.subscribe_action_event("/user/hand/left/output/haptic", callback=callback_action)
             _xr.subscribe_action_event("/user/hand/right/output/haptic", callback=callback_action)
