@@ -5,6 +5,7 @@ import sys
 import ctypes
 
 import cv2
+import numpy
 import numpy as np
 
 if __name__ != "__main__":
@@ -127,6 +128,9 @@ class OpenXR:
         self._frame_right = None
         self._viewport_window_left = None
         self._viewport_window_right = None
+
+        self._reference_position = Gf.Vec3d(0, 0, 0)
+        self._reference_rotation = Gf.Vec3d(90, 0, 0)
         self._rectification_quat_left = Gf.Quatd(1, 0, 0, 0)
         self._rectification_quat_right = Gf.Quatd(1, 0, 0, 0)
 
@@ -466,8 +470,8 @@ class OpenXR:
             for state in requested_action_pose_states:
                 value = None
                 if state.type == XR_ACTION_TYPE_POSE_INPUT and state.isActive:
-                    value = ((state.pose.position.x, state.pose.position.y, state.pose.position.z),
-                             (state.pose.orientation.x, state.pose.orientation.y, state.pose.orientation.z, state.pose.orientation.w))
+                    value = (Gf.Vec3d(state.pose.position.x, state.pose.position.y, state.pose.position.z),
+                             Gf.Quatd(state.pose.orientation.w, state.pose.orientation.x, state.pose.orientation.y, state.pose.orientation.z))
                     self._callback_action_events[state.path.decode("utf-8")](state.path.decode("utf-8"), value)
             return result
 
@@ -477,8 +481,8 @@ class OpenXR:
             for state in result[1]:
                 value = None
                 if state["type"] == XR_ACTION_TYPE_POSE_INPUT and state["isActive"]:
-                    value = ((state["pose"]["position"]["x"], state["pose"]["position"]["y"], state["pose"]["position"]["z"]),
-                             (state["pose"]["orientation"]["x"], state["pose"]["orientation"]["y"], state["pose"]["orientation"]["z"], state["pose"]["orientation"]["w"]))
+                    value = (Gf.Vec3d(state["pose"]["position"]["x"], state["pose"]["position"]["y"], state["pose"]["position"]["z"]),
+                             Gf.Quatd(state["pose"]["orientation"]["w"], state["pose"]["orientation"]["x"], state["pose"]["orientation"]["y"], state["pose"]["orientation"]["z"]))
                     self._callback_action_events[state["path"]](state["path"], value)
             return result[0]
     
@@ -498,15 +502,26 @@ class OpenXR:
         The callback function (a callable object) should have only the following 2 parameters:
         - path: str
            The complete path (user path and subpath) of the action that invokes the callback
-        - value: bool, float, tuple(float, float), tuple(tuple(float, float, float), tuple(float, float, float, float))
+        - value: bool, float, tuple(float, float), tuple(pxr.Gf.Vec3d, pxr.Gf.Quatd)
            The current state of the action according to its type
            - XR_ACTION_TYPE_BOOLEAN_INPUT: bool
            - XR_ACTION_TYPE_FLOAT_INPUT: float 
            - XR_ACTION_TYPE_VECTOR2F_INPUT (x, y): tuple(float, float)
-           - XR_ACTION_TYPE_POSE_INPUT (cartesian position (x,y,z), rotation as quaternion (x,y,z,w)): tuple(tuple(float, float, float), tuple(float, float, float, float))
+           - XR_ACTION_TYPE_POSE_INPUT (cartesian position, rotation as quaternion): tuple(pxr.Gf.Vec3d, pxr.Gf.Quatd)
 
         XR_ACTION_TYPE_VIBRATION_OUTPUT actions will not invoke their callback function. In this case the callback must be None
         XR_ACTION_TYPE_POSE_INPUT also specifies, through the definition of the reference_space parameter, the reference space used to retrieve the pose
+
+        The collection of available paths corresponds to the following [interaction profiles](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#semantic-path-interaction-profiles):
+        - [Khronos Simple Controller](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_khronos_simple_controller_profile)
+        - [Google Daydream Controller](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_google_daydream_controller_profile)
+        - [HTC Vive Controller](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_htc_vive_controller_profile)
+        - [HTC Vive Pro](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_htc_vive_pro_profile)
+        - [Microsoft Mixed Reality Motion Controller](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_microsoft_mixed_reality_motion_controller_profile)
+        - [Microsoft Xbox Controller](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_microsoft_xbox_controller_profile)
+        - [Oculus Go Controller](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_oculus_go_controller_profile)
+        - [Oculus Touch Controller](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_oculus_touch_controller_profile)
+        - [Valve Index Controller](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_valve_index_controller_profile)
 
         OpenXR internal function calls:
         - xrCreateAction
@@ -607,7 +622,7 @@ class OpenXR:
 
     # view utilities
 
-    def setup_mono_view(self, camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/camera") -> None:
+    def setup_mono_view(self, camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0)) -> None:
         """
         Setup Omniverse viewport and camera for monoscopic rendering
 
@@ -617,10 +632,14 @@ class OpenXR:
         ----------
         camera: str, pxr.Sdf.Path or pxr.Usd.Prim, optional
             Omniverse camera prim or path (default: '/OpenXR/Cameras/camera')
+        reference_position: pxr.Gf.Vec3d or None, optional
+            Cartesian position (in centimeters) used as reference (default: pxr.Gf.Vec3d(0, 0, 0))
+        reference_rotation: pxr.Gf.Vec3d or None, optional
+            Rotation (in degress) on each axis used as reference (default: pxr.Gf.Vec3d(90, 0, 0))
         """
-        self.setup_stereo_view(camera, None)
+        self.setup_stereo_view(camera, None, reference_position, reference_rotation)
 
-    def setup_stereo_view(self, left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim, None] = "/OpenXR/Cameras/right_camera") -> None:
+    def setup_stereo_view(self, left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim, None] = "/OpenXR/Cameras/right_camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0)) -> None:
         """
         Setup Omniverse viewports and cameras for stereoscopic rendering
 
@@ -632,6 +651,10 @@ class OpenXR:
             Omniverse left camera prim or path (default: '/OpenXR/Cameras/left_camera')
         right_camera: str, pxr.Sdf.Path or pxr.Usd.Prim, optional
             Omniverse right camera prim or path (default: '/OpenXR/Cameras/right_camera')
+        reference_position: pxr.Gf.Vec3d or None, optional
+            Cartesian position (in centimeters) used as reference (default: pxr.Gf.Vec3d(0, 0, 0))
+        reference_rotation: pxr.Gf.Vec3d or None, optional
+            Rotation (in degress) on each axis used as reference (default: pxr.Gf.Vec3d(90, 0, 0))
         """
         def get_or_create_vieport_window(camera, teleport=True, window_size=(400, 300), resolution=(1280, 720)):
             window = None
@@ -656,6 +679,9 @@ class OpenXR:
                     window.set_camera_target(camera, 0.0, 0.0, 0.0, True)
             return window
         
+        self._reference_position = reference_position
+        self._reference_rotation = reference_rotation
+
         stage = omni.usd.get_context().get_stage()
 
         # left camera
@@ -750,7 +776,7 @@ class OpenXR:
         self._transform_fit = fit
         self._transform_flip = flip
 
-    def teleport_prim(self, prim: pxr.Usd.Prim, position: pxr.Gf.Vec3d, rotation: pxr.Gf.Quatd) -> None:
+    def teleport_prim(self, prim: pxr.Usd.Prim, position: pxr.Gf.Vec3d, rotation: pxr.Gf.Quatd, reference_position: Union[pxr.Gf.Vec3d, None] = None, reference_rotation: Union[pxr.Gf.Vec3d, None] = None) -> None:
         """
         Teleport the prim specified by the given transformation (position and rotation)
 
@@ -762,26 +788,28 @@ class OpenXR:
             Cartesian position (in centimeters) used to transform the prim
         rotation: pxr.Gf.Quatd
             Rotation (as quaternion) used to transform the prim
+        reference_position: pxr.Gf.Vec3d or None, optional
+            Cartesian position (in centimeters) used as reference (default: None)
+        reference_rotation: pxr.Gf.Vec3d or None, optional
+            Rotation (in degress) on each axis used as reference (default: None)
         """
-        # TODO: specify the base position and translation when camera is configured (setup_mono/stereo_view)
         properties = prim.GetPropertyNames()
-        translated, rotated = False, False
-        # translate
-        if "xformOp:translate" in properties or "xformOp:translation" in properties:
-            prim.GetAttribute("xformOp:translate").Set(position)
-            translated = True
-        # rotate
-        if "xformOp:rotate" in properties:
-            prim.GetAttribute("xformOp:rotate").Set(Gf.Vec3d(90, 0, 0))
-        elif "xformOp:rotateXYZ" in properties:
-            prim.GetAttribute("xformOp:rotateXYZ").Set(Gf.Vec3d(90, 0, 0))
+        # reference position
+        if reference_position is not None:
+            if "xformOp:translate" in properties or "xformOp:translation" in properties:
+                prim.GetAttribute("xformOp:translate").Set(position)
+        # reference rotation
+        if reference_rotation is not None:
+            if "xformOp:rotate" in properties:
+                prim.GetAttribute("xformOp:rotate").Set(Gf.Vec3d(90, 0, 0))
+            elif "xformOp:rotateXYZ" in properties:
+                prim.GetAttribute("xformOp:rotateXYZ").Set(Gf.Vec3d(90, 0, 0))
         
+        # transform
         mat = Gf.Matrix4d()
         mat.SetIdentity()
-        if not translated:
-            mat.SetTranslateOnly(position)
-        if not rotated:
-            mat.SetRotateOnly(Gf.Rotation(rotation))
+        mat.SetTranslateOnly(position)
+        mat.SetRotateOnly(Gf.Rotation(rotation))
         if "xformOp:transform" in properties:
             prim.GetAttribute("xformOp:transform").Set(mat)
         else:
@@ -789,6 +817,29 @@ class OpenXR:
             UsdGeom.Xformable(prim).AddXformOp(UsdGeom.XformOp.TypeTransform, UsdGeom.XformOp.PrecisionDouble, "").Set(mat)
 
     def subscribe_render_event(self, callback=None):
+        """
+        Subscribe a callback function to the render event
+
+        The callback function (a callable object) should have only the following 3 parameters:
+        - num_views: int
+           The number of views to render: mono (1), stereo (2)
+        - views: tuple of XrView structure
+           A [XrView](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrView) structure contains the view pose and projection state necessary to render a image.
+           The length of the tuple corresponds to the number of views (if the tuple length is 2, index 0 represents the left eye and index 1 represents the right eye)
+        - configuration_views: tuple of XrViewConfigurationView structure
+           A [XrViewConfigurationView](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrViewConfigurationView) structure specifies properties related to rendering of a view (e.g. the optimal width and height to be used when rendering the view).
+           The length of the tuple corresponds to the number of views (if the tuple length is 2, index 0 represents the left eye and index 1 represents the right eye)
+
+        The callback function must call the set_frames function to pass to the selected graphics API the image or images to be rendered
+
+        If the callback is None, an internal callback will be used to render the views. This internal callback updates the pose of the cameras according to the specified reference system, gets the images from the previously configured viewports and invokes the set_frames function to render the views.
+
+        Parameters
+        ----------
+        callback: callable object (3 parameters) or None, optional
+            Callback invoked on each render event (default: None)
+        """
+        # TODO: use structure to access views and configuration_views data for ctypes and pybind11
         def _internal_callback(num_views, views, configuration_views):
             # XR_REFERENCE_SPACE_TYPE_VIEW:  +Y up, +X to the right, and -Z forward
             # XR_REFERENCE_SPACE_TYPE_LOCAL: +Y up, +X to the right, and -Z forward
@@ -804,7 +855,7 @@ class OpenXR:
                 rotation = views[0]["pose"]["orientation"]
                 position = Gf.Vec3d(position["x"] * 100, -position["z"] * 100, position["y"] * 100)
                 rotation = Gf.Quatd(rotation["w"], rotation["x"], rotation["y"], rotation["z"])
-            self.teleport_prim(self._prim_left, position, self._rectification_quat_left * rotation)            
+            self.teleport_prim(self._prim_left, position, self._rectification_quat_left * rotation, self._reference_position, self._reference_rotation)            
 
             # teleport right camera
             if num_views == 2:
@@ -818,7 +869,7 @@ class OpenXR:
                     rotation = views[1]["pose"]["orientation"]
                     position = Gf.Vec3d(position["x"] * 100, -position["z"] * 100, position["y"] * 100)
                     rotation = Gf.Quatd(rotation["w"], rotation["x"], rotation["y"], rotation["z"])
-                self.teleport_prim(self._prim_right, position, self._rectification_quat_right * rotation)
+                self.teleport_prim(self._prim_right, position, self._rectification_quat_right * rotation, self._reference_position, self._reference_rotation)
             
             # set frames
             try:
@@ -837,7 +888,29 @@ class OpenXR:
             self._callback_render_event = callback
             self._app.setRenderCallback(self._callback_render_event)
 
-    def set_frames(self, configuration_views: list, left: np.ndarray, right: np.ndarray = None) -> bool:
+    def set_frames(self, configuration_views: list, left: numpy.ndarray, right: numpy.ndarray = None) -> bool:
+        """
+        Pass to the selected graphics API the images to be rendered in the views
+
+        In the case of stereoscopic devices, the parameters left and right represent the left eye and right eye respectively.
+        To pass an image to the graphic API of monoscopic devices only the parameter left should be used (the parameter right must be None)
+
+        This function will apply to each image the transformations defined by the set_frame_transformations function if they were specified
+
+        Parameters
+        ----------
+        configuration_views: tuple of XrViewConfigurationView structure
+            A [XrViewConfigurationView](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#XrViewConfigurationView) structure specifies properties related to rendering of a view (e.g. the optimal width and height to be used when rendering the view)
+        left: numpy.ndarray
+            RGB or RGBA image (numpy.uint8)  
+        right: numpy.ndarray or None
+            RGB or RGBA image (numpy.uint8)
+
+        Returns
+        -------
+        bool
+            True if there is no error during the passing to the selected graphics API, otherwise False
+        """
         use_rgba = True if left.shape[2] == 4 else False
         if self._use_ctypes:
             self._frame_left = self._transform(configuration_views[0], left)
