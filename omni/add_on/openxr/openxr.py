@@ -238,7 +238,7 @@ class OpenXR:
         else:
             return self._app.isSessionRunning()
 
-    def create_instance(self, application_name: str = "Omniverse (VR)", engine_name: str = "", api_layers: list = [], extensions: list = []) -> bool:
+    def create_instance(self, application_name: str = "Omniverse (XR)", engine_name: str = "", api_layers: list = [], extensions: list = []) -> bool:
         """
         Create an OpenXR instance to allow communication with an OpenXR runtime
 
@@ -308,7 +308,7 @@ class OpenXR:
         blend_mode: {XR_ENVIRONMENT_BLEND_MODE_OPAQUE, XR_ENVIRONMENT_BLEND_MODE_ADDITIVE, XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND}, optional
             Desired environment [blend mode](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#environment_blend_mode) from XrEnvironmentBlendMode enum (default: XR_ENVIRONMENT_BLEND_MODE_OPAQUE)
         view_configuration_type: {XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO}, optional
-            Primary [view configuration] (https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#view_configurations) type from XrViewConfigurationType enum (default: XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO)
+            Primary [view configuration](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#view_configurations) type from XrViewConfigurationType enum (default: XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO)
 
         Returns
         -------
@@ -845,7 +845,7 @@ class OpenXR:
             print("Create")
             UsdGeom.Xformable(prim).AddXformOp(UsdGeom.XformOp.TypeTransform, UsdGeom.XformOp.PrecisionDouble, "").Set(mat)
 
-    def subscribe_render_event(self, callback=None):
+    def subscribe_render_event(self, callback=None) -> None:
         """
         Subscribe a callback function to the render event
 
