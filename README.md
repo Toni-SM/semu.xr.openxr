@@ -51,15 +51,18 @@ xr.get_system()
 
 # action callback
 def on_action_event(path, value):
-    # apply haptic vibration when the controller trigger is pressed more than halfway
-    if path == "/user/hand/left/input/trigger/value" and value > 0.5:
+    if path == "/user/hand/left/input/trigger/value":
+      # modify the sphere's radius (from 1 o 10) acording to the controller's trigger position  
+      sphere_prim.GetAttribute("radius").Set(value * 9 + 1)
+      # apply haptic vibration when the controller's trigger is fully depressed
+      if value == 1:
         xr.apply_haptic_feedback("/user/hand/left/output/haptic", {"duration": _openxr.XR_MIN_HAPTIC_DURATION})
     # mirror the controller's pose on the sphere (cartesian position and rotation as quaternion)
     elif path == "/user/hand/left/input/grip/pose":
         xr.teleport_prim(sphere_prim, value[0], value[1])
 
 # subscribe controller actions (haptic actions don't require callbacks) 
-xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=on_action_event)
+xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=on_action_event, reference_space=_openxr.XR_REFERENCE_SPACE_TYPE_STAGE)
 xr.subscribe_action_event("/user/hand/left/input/trigger/value", callback=on_action_event)
 xr.subscribe_action_event("/user/hand/left/output/haptic")
 
@@ -68,6 +71,8 @@ xr.create_session()
 
 # setup cameras and viewports and prepare rendering using internal callback
 xr.setup_stereo_view()
+xr.set_frame_transformations(flip=0)
+xr.set_stereo_rectification(y=0.05)
 
 # execute action and rendering loop on each simulation step
 def on_simulation_step(step):
@@ -266,7 +271,7 @@ The following functions are provided on the OpenXR interface:
      | ```XR_ACTION_TYPE_BOOLEAN_INPUT``` | ```bool``` |
      | ```XR_ACTION_TYPE_FLOAT_INPUT``` | ```float``` |
      | ```XR_ACTION_TYPE_VECTOR2F_INPUT``` (x, y) | ```tuple(float, float)``` |
-     | ```XR_ACTION_TYPE_POSE_INPUT``` (cartesian position, rotation as quaternion) | ```tuple(pxr.Gf.Vec3d, pxr.Gf.Quatd)``` |
+     | ```XR_ACTION_TYPE_POSE_INPUT``` (position (in centimeters), rotation as quaternion) | ```tuple(pxr.Gf.Vec3d, pxr.Gf.Quatd)``` |
 
   ```XR_ACTION_TYPE_VIBRATION_OUTPUT``` actions will not invoke their callback function. In this case the callback must be None
      
