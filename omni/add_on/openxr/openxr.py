@@ -623,7 +623,7 @@ class OpenXR:
 
     # view utilities
 
-    def setup_mono_view(self, camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0)) -> None:
+    def setup_mono_view(self, camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0), camera_properties: dict = {"focalLength": 10}) -> None:
         """
         Setup Omniverse viewport and camera for monoscopic rendering
 
@@ -637,10 +637,12 @@ class OpenXR:
             Cartesian position (in centimeters) used as reference (default: pxr.Gf.Vec3d(0, 0, 0))
         reference_rotation: pxr.Gf.Vec3d or None, optional
             Rotation (in degress) on each axis used as reference (default: pxr.Gf.Vec3d(90, 0, 0))
+        camera_properties: dict:
+            Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: {"focalLength": 10})
         """
-        self.setup_stereo_view(camera, None, reference_position, reference_rotation)
+        self.setup_stereo_view(camera, None, reference_position, reference_rotation, camera_properties)
 
-    def setup_stereo_view(self, left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim, None] = "/OpenXR/Cameras/right_camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0)) -> None:
+    def setup_stereo_view(self, left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim, None] = "/OpenXR/Cameras/right_camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0), camera_properties: dict = {"focalLength": 10}) -> None:
         """
         Setup Omniverse viewports and cameras for stereoscopic rendering
 
@@ -656,6 +658,8 @@ class OpenXR:
             Cartesian position (in centimeters) used as reference (default: pxr.Gf.Vec3d(0, 0, 0))
         reference_rotation: pxr.Gf.Vec3d or None, optional
             Rotation (in degress) on each axis used as reference (default: pxr.Gf.Vec3d(90, 0, 0))
+        camera_properties: dict:
+            Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: {"focalLength": 10})
         """
         def get_or_create_vieport_window(camera, teleport=True, window_size=(400, 300), resolution=(1280, 720)):
             window = None
@@ -717,6 +721,12 @@ class OpenXR:
         if len(resolutions) == 2 and self._viewport_window_right is not None:
             self._viewport_window_right.set_texture_resolution(*resolutions[1])
 
+        # set camera properties
+        for property in camera_properties:
+            self._prim_left.GetAttribute(property).Set(camera_properties[property])
+            if right_camera is not None:
+                self._prim_right.GetAttribute(property).Set(camera_properties[property])
+        
     def get_recommended_resolutions(self) -> tuple:
         """
         Get the recommended resolution of the display device
