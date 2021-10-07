@@ -471,7 +471,7 @@ class OpenXR:
             for state in requested_action_pose_states:
                 value = None
                 if state.type == XR_ACTION_TYPE_POSE_INPUT and state.isActive:
-                    value = (Gf.Vec3d(state.pose.position.x, -state.pose.position.z, state.pose.position.y),
+                    value = (Gf.Vec3d(state.pose.position.x, -state.pose.position.z, state.pose.position.y) * 100,
                              Gf.Quatd(state.pose.orientation.w, state.pose.orientation.x, state.pose.orientation.y, state.pose.orientation.z))
                     self._callback_action_pose_events[state.path.decode("utf-8")](state.path.decode("utf-8"), value)
             return result
@@ -482,7 +482,7 @@ class OpenXR:
             for state in result[1]:
                 value = None
                 if state["type"] == XR_ACTION_TYPE_POSE_INPUT and state["isActive"]:
-                    value = (Gf.Vec3d(state["pose"]["position"]["x"], -state["pose"]["position"]["z"], state["pose"]["position"]["y"]),
+                    value = (Gf.Vec3d(state["pose"]["position"]["x"], -state["pose"]["position"]["z"], state["pose"]["position"]["y"]) * 100,
                              Gf.Quatd(state["pose"]["orientation"]["w"], state["pose"]["orientation"]["x"], state["pose"]["orientation"]["y"], state["pose"]["orientation"]["z"]))
                     self._callback_action_pose_events[state["path"]](state["path"], value)
             return result[0]
@@ -508,7 +508,7 @@ class OpenXR:
            - XR_ACTION_TYPE_BOOLEAN_INPUT: bool
            - XR_ACTION_TYPE_FLOAT_INPUT: float 
            - XR_ACTION_TYPE_VECTOR2F_INPUT (x, y): tuple(float, float)
-           - XR_ACTION_TYPE_POSE_INPUT (cartesian position, rotation as quaternion): tuple(pxr.Gf.Vec3d, pxr.Gf.Quatd)
+           - XR_ACTION_TYPE_POSE_INPUT (position (in centimeters), rotation as quaternion): tuple(pxr.Gf.Vec3d, pxr.Gf.Quatd)
 
         XR_ACTION_TYPE_VIBRATION_OUTPUT actions will not invoke their callback function. In this case the callback must be None
         XR_ACTION_TYPE_POSE_INPUT also specifies, through the definition of the reference_space parameter, the reference space used to retrieve the pose
