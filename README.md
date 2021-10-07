@@ -344,7 +344,7 @@ The following functions are provided on the OpenXR interface:
 - Setup Omniverse viewport and camera for monoscopic rendering
 
   ```python
-  setup_mono_view(camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0)) -> None
+  setup_mono_view(camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0), camera_properties: dict = {"focalLength": 10}) -> None
   ```
 
   This method obtains the viewport window for the given camera. If the viewport window does not exist, a new one is created and the camera is set as active. If the given camera does not exist, a new camera is created with the same path and set to the recommended resolution of the display device
@@ -362,10 +362,14 @@ The following functions are provided on the OpenXR interface:
     
     Rotation (in degress) on each axis used as reference (default: ```pxr.Gf.Vec3d(90, 0, 0)```)
 
+  - camera_properties: ```dict```
+    
+    Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: ```{"focalLength": 10}```)
+
 - Setup Omniverse viewports and cameras for stereoscopic rendering
 
   ```python
-  setup_stereo_view(left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim, None] = "/OpenXR/Cameras/right_camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0)) -> None
+  setup_stereo_view(left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim, None] = "/OpenXR/Cameras/right_camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0), camera_properties: dict = {"focalLength": 10}) -> None
   ```
 
   This method obtains the viewport window for each camera. If the viewport window does not exist, a new one is created and the camera is set as active. If the given cameras do not exist, new cameras are created with the same path and set to the recommended resolution of the display device
@@ -385,7 +389,11 @@ The following functions are provided on the OpenXR interface:
     
   - reference_rotation: ```pxr.Gf.Vec3d``` or ```None```, optional
     
-    Rotation (in degress) on each axis used as reference (default: ```pxr.Gf.Vec3d(90, 0, 0)```)
+    Rotation (in degress) on each axis used as reference (default: ```pxr.Gf.Vec3d(90, 0, 0)```)x
+    
+  - camera_properties: ```dict```
+    
+    Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: ```{"focalLength": 10}```)
 
 - Get the recommended resolution of the display device
 

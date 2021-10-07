@@ -637,7 +637,7 @@ class OpenXR:
             Cartesian position (in centimeters) used as reference (default: pxr.Gf.Vec3d(0, 0, 0))
         reference_rotation: pxr.Gf.Vec3d or None, optional
             Rotation (in degress) on each axis used as reference (default: pxr.Gf.Vec3d(90, 0, 0))
-        camera_properties: dict:
+        camera_properties: dict
             Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: {"focalLength": 10})
         """
         self.setup_stereo_view(camera, None, reference_position, reference_rotation, camera_properties)
@@ -658,7 +658,7 @@ class OpenXR:
             Cartesian position (in centimeters) used as reference (default: pxr.Gf.Vec3d(0, 0, 0))
         reference_rotation: pxr.Gf.Vec3d or None, optional
             Rotation (in degress) on each axis used as reference (default: pxr.Gf.Vec3d(90, 0, 0))
-        camera_properties: dict:
+        camera_properties: dict
             Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: {"focalLength": 10})
         """
         def get_or_create_vieport_window(camera, teleport=True, window_size=(400, 300), resolution=(1280, 720)):
