@@ -804,56 +804,42 @@ class OpenXR:
         reference_rotation: pxr.Gf.Vec3d or None, optional
             Rotation (in degress) on each axis used as reference (default: None)
         """
-        # TODO: specify the base position and translation when camera is configured (setup_mono/stereo_view)
         properties = prim.GetPropertyNames()
-        translated, rotated = False, False
-        # translate
-        if "xformOp:translate" in properties or "xformOp:translation" in properties:
-            prim.GetAttribute("xformOp:translate").Set(position)
-            translated = True
-        # rotate
-        if "xformOp:rotate" in properties:
-            prim.GetAttribute("xformOp:rotate").Set(Gf.Vec3d(90, 0, 0))
-        elif "xformOp:rotateXYZ" in properties:
-            prim.GetAttribute("xformOp:rotateXYZ").Set(Gf.Vec3d(90, 0, 0))
-        
-        mat = Gf.Matrix4d()
-        mat.SetIdentity()
-        if not translated:
-            mat.SetTranslateOnly(position)
-        if not rotated:
-            mat.SetRotateOnly(Gf.Rotation(rotation))
-        if "xformOp:transform" in properties:
-            prim.GetAttribute("xformOp:transform").Set(mat)
-        else:
-            print("Create")
-            UsdGeom.Xformable(prim).AddXformOp(UsdGeom.XformOp.TypeTransform, UsdGeom.XformOp.PrecisionDouble, "").Set(mat)
-        return
-        properties = prim.GetPropertyNames()
-        translated, rotated = False, False
+
         # reference position
-        # if reference_position is not None:
-        if "xformOp:translate" in properties or "xformOp:translation" in properties:
-            prim.GetAttribute("xformOp:translate").Set(position)
-            translated = True
-        # reference rotation
-        # if reference_rotation is not None:
-        if "xformOp:rotate" in properties:
-            prim.GetAttribute("xformOp:rotate").Set(Gf.Vec3d(90,0,0))
-        elif "xformOp:rotateXYZ" in properties:
-            prim.GetAttribute("xformOp:rotateXYZ").Set(Gf.Vec3d(90,0,0))
-        
-        # transform
-        mat = Gf.Matrix4d()
-        mat.SetIdentity()
-        if not translated:
-            mat.SetTranslateOnly(position)
-        mat.SetRotateOnly(Gf.Rotation(rotation))
-        if "xformOp:transform" in properties:
-            prim.GetAttribute("xformOp:transform").Set(mat)
+        if reference_position is not None:
+            if "xformOp:translate" in properties or "xformOp:translation" in properties:
+                prim.GetAttribute("xformOp:translate").Set(reference_position + position)
+            else:
+                print("[INFO] Create UsdGeom.XformOp.TypeTranslate for", prim.GetPath())
+                UsdGeom.Xformable(prim).AddXformOp(UsdGeom.XformOp.TypeTranslate, UsdGeom.XformOp.PrecisionDouble, "").Set(reference_position + position)
         else:
-            print("Create")
-            UsdGeom.Xformable(prim).AddXformOp(UsdGeom.XformOp.TypeTransform, UsdGeom.XformOp.PrecisionDouble, "").Set(mat)
+            if "xformOp:translate" in properties or "xformOp:translation" in properties:
+                prim.GetAttribute("xformOp:translate").Set(position)
+            else:
+                print("[INFO] Create UsdGeom.XformOp.TypeTranslate for", prim.GetPath())
+                UsdGeom.Xformable(prim).AddXformOp(UsdGeom.XformOp.TypeTranslate, UsdGeom.XformOp.PrecisionDouble, "").Set(position)
+
+        # reference rotation
+        if reference_rotation is not None:
+            if "xformOp:rotate" in properties:
+                prim.GetAttribute("xformOp:rotate").Set(reference_rotation)
+            elif "xformOp:rotateXYZ" in properties:
+                prim.GetAttribute("xformOp:rotateXYZ").Set(reference_rotation)
+            else:
+                print("[INFO] Create UsdGeom.XformOp.TypeRotateXYZ for", prim.GetPath())
+                UsdGeom.Xformable(prim).AddXformOp(UsdGeom.XformOp.TypeRotateXYZ, UsdGeom.XformOp.PrecisionDouble, "").Set(reference_rotation)
+
+        # transform
+        transform_matrix = Gf.Matrix4d()
+        transform_matrix.SetIdentity()
+        # transform_matrix.SetTranslateOnly(position)
+        transform_matrix.SetRotateOnly(Gf.Rotation(rotation))
+        if "xformOp:transform" in properties:
+            prim.GetAttribute("xformOp:transform").Set(transform_matrix)
+        else:
+            print("[INFO] Create UsdGeom.XformOp.TypeTransform for", prim.GetPath())
+            UsdGeom.Xformable(prim).AddXformOp(UsdGeom.XformOp.TypeTransform, UsdGeom.XformOp.PrecisionDouble, "").Set(transform_matrix)
 
     def subscribe_render_event(self, callback=None) -> None:
         """
