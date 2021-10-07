@@ -586,7 +586,7 @@ The following functions are provided on the OpenXR interface:
 
   - ```XR_NO_DURATION``` = 0
 
-  - ```XR_INFINITE_DURATION``` = 2**32
+  - ```XR_INFINITE_DURATION``` = 0x7fffffffffffffff
 
   - ```XR_MIN_HAPTIC_DURATION``` = -1
 
