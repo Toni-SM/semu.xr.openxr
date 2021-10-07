@@ -6,6 +6,7 @@
 
 ### Table of Contents
 
+- [Add the extension to a NVIDIA Omniverse app and enable it](#extension)
 - [Diagrams](#diagrams)
 - [Sample code](#sample)
 - [Extension API](#api)
@@ -13,6 +14,21 @@
   - [OpenXR API](#api-functions)
   - [Available enumerations](#api-enumerations)
   - [Available constants](#api-constants)
+
+<br>
+
+<a name="extension"></a>
+### Add the extension to a NVIDIA Omniverse app and enable it
+
+1. Add the the extension by following the steps described in [Extension Search Paths](https://docs.omniverse.nvidia.com/py/kit/docs/guide/extensions.html#extension-search-paths)
+
+2. Enable the extension by following the steps described in [Extension Enabling/Disabling](https://docs.omniverse.nvidia.com/py/kit/docs/guide/extensions.html#extension-enabling-disabling)
+
+3. Import the extension into any python code and use it...
+
+    ```python
+    from omni.add_on.openxr import _openxr
+    ```
 
 <br>
 
