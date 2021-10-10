@@ -45,6 +45,8 @@ Typical OpenXR application showing the grouping of the standard functions under 
 
 ![openxr-application](https://user-images.githubusercontent.com/22400377/136704215-5507bbee-666a-42da-b692-cbf8c08a749b.png)
 
+<br>
+
 <a name="sample"></a>
 ### Sample code
 
@@ -98,6 +100,8 @@ physx_subs = omni.physx.get_physx_interface().subscribe_physics_step_events(on_s
 ```
 
 [Watch the sample video](https://user-images.githubusercontent.com/22400377/136706132-cc96dc22-235d-454d-a145-a65f6a35c9f2.mp4)
+
+<br>
 
 <a name="api"></a>
 ### API
