@@ -11,7 +11,7 @@
 - [Sample code](#sample)
 - [Extension API](#api)
   - [Acquiring extension interface](#api-interface)
-  - [OpenXR API](#api-functions)
+  - [API](#api-functions)
   - [Available enumerations](#api-enumerations)
   - [Available constants](#api-constants)
 
@@ -67,8 +67,9 @@ xr.get_system()
 
 # action callback
 def on_action_event(path, value):
+    # process controller's trigger
     if path == "/user/hand/left/input/trigger/value":
-      # modify the sphere's radius (from 1 o 10) acording to the controller's trigger position  
+      # modify the sphere's radius (from 1 o 10 centimeters) according to the controller's trigger position
       sphere_prim.GetAttribute("radius").Set(value * 9 + 1)
       # apply haptic vibration when the controller's trigger is fully depressed
       if value == 1:
@@ -82,10 +83,10 @@ xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=on_action_
 xr.subscribe_action_event("/user/hand/left/input/trigger/value", callback=on_action_event)
 xr.subscribe_action_event("/user/hand/left/output/haptic")
 
-# create session and define interaction profile
+# create session and define interaction profiles
 xr.create_session()
 
-# setup cameras and viewports and prepare rendering using internal callback
+# setup cameras and viewports and prepare rendering using the internal callback
 xr.setup_stereo_view()
 xr.set_frame_transformations(flip=0)
 xr.set_stereo_rectification(y=0.05)
@@ -122,7 +123,7 @@ physx_subs = omni.physx.get_physx_interface().subscribe_physics_step_events(on_s
   ```
 
 <a name="api-functions"></a>
-#### OpenXR API
+#### API
 
 The following functions are provided on the OpenXR interface:
 
