@@ -38,14 +38,12 @@
 High-level overview of extension usage, including the order of function calls, callbacks and the action and rendering loop
 
 <p align="center">
-  <img src="extension.png" width="55%">
+  <img src="https://user-images.githubusercontent.com/22400377/136704217-66fbb7a8-1ee0-4035-b268-61c30da71f17.png" width="55%">
 </p>
-
-<!-- ![pyplot](extension.png) -->
 
 Typical OpenXR application showing the grouping of the standard functions under the compact binding provided by the extension (adapted from [openxr-10-reference-guide.pdf](https://www.khronos.org/registry/OpenXR/specs/1.0/refguide/openxr-10-reference-guide.pdf))
 
-![pyplot](openxr-application.png)
+![openxr-application](https://user-images.githubusercontent.com/22400377/136704215-5507bbee-666a-42da-b692-cbf8c08a749b.png)
 
 <a name="sample"></a>
 ### Sample code
@@ -98,6 +96,8 @@ def on_simulation_step(step):
 
 physx_subs = omni.physx.get_physx_interface().subscribe_physics_step_events(on_simulation_step)
 ```
+
+[Watch the sample video](https://user-images.githubusercontent.com/22400377/136706132-cc96dc22-235d-454d-a145-a65f6a35c9f2.mp4)
 
 <a name="api"></a>
 ### API
