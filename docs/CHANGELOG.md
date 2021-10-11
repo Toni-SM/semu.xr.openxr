@@ -2,9 +2,9 @@
 CHANGELOG
 **********
 
-[0.0.1] - 2021-09-12
+[0.0.1] - 2021-10-01
 ========================
 
 Added
 -------
-- update to Isaac Sim 2021.1.1
+- create OpenXR application binding with OpenGL support 

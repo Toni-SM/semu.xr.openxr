@@ -1,9 +1,5 @@
-# Usage
+# omni.add_on.openxr
 
-To enable this extension, go to the Extensions window and enable omni.add_on.openxr extension. Visit https://github.com/Toni-SM/omni.add_on.openxr for more details about how tu use this extension.
+This extension provides a compact python binding (on top of the open standard OpenXR for augmented reality (AR) and virtual reality (VR)) to create extended reality applications taking advantage of NVIDIA Omniverse rendering capabilities
 
-* Import the extension into any python code and use it: 
-
-```
-from omni.add_on.openxr import _openxr
-```
+Visit https://github.com/Toni-SM/omni.add_on.openxr to read more about its use
