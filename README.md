@@ -411,11 +411,11 @@ The following functions are provided on the OpenXR interface:
     
   - reference_position: ```pxr.Gf.Vec3d``` or ```None```, optional
     
-    Cartesian position (in centimeters) used as reference (default: ```pxr.Gf.Vec3d(0, 0, 0)```)
+    Cartesian position (in centimeters) used as reference origin (default: ```pxr.Gf.Vec3d(0, 0, 0)```)
     
   - reference_rotation: ```pxr.Gf.Vec3d``` or ```None```, optional
     
-    Rotation (in degress) on each axis used as reference (default: ```pxr.Gf.Vec3d(90, 0, 0)```)x
+    Rotation (in degress) on each axis used as reference origin (default: ```pxr.Gf.Vec3d(90, 0, 0)```)x
     
   - camera_properties: ```dict```
     
@@ -464,7 +464,7 @@ The following functions are provided on the OpenXR interface:
   
   - flip: ```int```, ```tuple``` or ```None```, optionl
     
-    Flips each image around vertical (0), horizontal (1), or both axes (0,1) (default: ```None```) 
+    Flip each image around vertical (0), horizontal (1), or both axes (0,1) (default: ```None```) 
 
 - Teleport the prim specified by the given transformation (position and rotation)
 

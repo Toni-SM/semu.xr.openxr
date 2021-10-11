@@ -64,8 +64,8 @@ def acquire_openxr_interface():
     return OpenXR()
 
 def release_openxr_interface(xr):
-    print("TODO: _openxr.release_openxr_interface")
-    pass
+    if xr is not None:
+        xr.destroy()
 
 
 
@@ -223,6 +223,10 @@ class OpenXR:
         except Exception as e:
             print("[WARNING] omni.kit.viewport.get_viewport_interface:", e)
         return True
+
+    def destroy(self):
+        # TODO: implement
+        pass
 
     def is_session_running(self) -> bool:
         """
@@ -782,7 +786,7 @@ class OpenXR:
             Adjust each rendered image to the recommended resolution of the display device by cropping and scaling the image from its center (default: False)
             OpenCV.resize method with INTER_LINEAR interpolation will be used to scale the image to the recommended resolution
         flip: int, tuple or None, optionl
-            Flips each image around vertical (0), horizontal (1), or both axes (0,1) (default: None) 
+            Flip each image around vertical (0), horizontal (1), or both axes (0,1) (default: None) 
         """
         self._transform_fit = fit
         self._transform_flip = flip
