@@ -747,7 +747,7 @@ class OpenXR:
             if self._lib.getViewConfigurationViews(self._app, views, num_views):
                 return [(view.recommendedImageRectWidth, view.recommendedImageRectHeight) for view in views]
             else:
-                return []
+                return tuple([])
         else:
             return tuple([(view["recommendedImageRectWidth"], view["recommendedImageRectHeight"]) for view in self._app.getViewConfigurationViews()])
 
