@@ -999,10 +999,10 @@ class OpenXR:
             recommended_size = (configuration_view.recommendedImageRectWidth, configuration_view.recommendedImageRectHeight)
             if current_ratio > recommended_ratio:
                 m = int(abs(recommended_ratio * frame.shape[0] - frame.shape[1]) / 2)
-                frame = cv2.resize(frame[:, m:-m], recommended_size, interpolation=cv2.INTER_LINEAR)
+                frame = cv2.resize(frame[:, m:-m] if m else frame, recommended_size, interpolation=cv2.INTER_LINEAR)
             else:
                 m = int(abs(frame.shape[1] / recommended_ratio - frame.shape[0]) / 2)
-                frame = cv2.resize(frame[m:-m, :], recommended_size, interpolation=cv2.INTER_LINEAR)
+                frame = cv2.resize(frame[m:-m, :] if m else frame, recommended_size, interpolation=cv2.INTER_LINEAR)
         return np.array(frame, copy=True) if transformed else frame
 
 
