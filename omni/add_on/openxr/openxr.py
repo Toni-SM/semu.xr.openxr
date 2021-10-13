@@ -829,7 +829,10 @@ class OpenXR:
             if "xformOp:rotate" in properties:
                 prim.GetAttribute("xformOp:rotate").Set(reference_rotation)
             elif "xformOp:rotateXYZ" in properties:
-                prim.GetAttribute("xformOp:rotateXYZ").Set(reference_rotation)
+                try:
+                    prim.GetAttribute("xformOp:rotateXYZ").Set(reference_rotation)
+                except:
+                    prim.GetAttribute("xformOp:rotateXYZ").Set(Gf.Vec3f(reference_rotation))
             else:
                 print("[INFO] Create UsdGeom.XformOp.TypeRotateXYZ for", prim.GetPath())
                 UsdGeom.Xformable(prim).AddXformOp(UsdGeom.XformOp.TypeRotateXYZ, UsdGeom.XformOp.PrecisionDouble, "").Set(reference_rotation)
