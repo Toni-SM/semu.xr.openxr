@@ -130,7 +130,7 @@ class OpenXR:
         self._viewport_window_right = None
 
         self._reference_position = Gf.Vec3d(0, 0, 0)
-        self._reference_rotation = Gf.Vec3d(90, 0, 0)
+        self._reference_rotation = Gf.Vec3d(0, 0, 0)
         self._rectification_quat_left = Gf.Quatd(1, 0, 0, 0)
         self._rectification_quat_right = Gf.Quatd(1, 0, 0, 0)
 
@@ -627,7 +627,7 @@ class OpenXR:
 
     # view utilities
 
-    def setup_mono_view(self, camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0), camera_properties: dict = {"focalLength": 10}) -> None:
+    def setup_mono_view(self, camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/camera", camera_properties: dict = {"focalLength": 10}) -> None:
         """
         Setup Omniverse viewport and camera for monoscopic rendering
 
@@ -637,16 +637,12 @@ class OpenXR:
         ----------
         camera: str, pxr.Sdf.Path or pxr.Usd.Prim, optional
             Omniverse camera prim or path (default: '/OpenXR/Cameras/camera')
-        reference_position: pxr.Gf.Vec3d or None, optional
-            Cartesian position (in centimeters) used as reference (default: pxr.Gf.Vec3d(0, 0, 0))
-        reference_rotation: pxr.Gf.Vec3d or None, optional
-            Rotation (in degress) on each axis used as reference (default: pxr.Gf.Vec3d(90, 0, 0))
         camera_properties: dict
             Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: {"focalLength": 10})
         """
-        self.setup_stereo_view(camera, None, reference_position, reference_rotation, camera_properties)
+        self.setup_stereo_view(camera, None, camera_properties)
 
-    def setup_stereo_view(self, left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim, None] = "/OpenXR/Cameras/right_camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0), camera_properties: dict = {"focalLength": 10}) -> None:
+    def setup_stereo_view(self, left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim, None] = "/OpenXR/Cameras/right_camera", camera_properties: dict = {"focalLength": 10}) -> None:
         """
         Setup Omniverse viewports and cameras for stereoscopic rendering
 
@@ -658,10 +654,6 @@ class OpenXR:
             Omniverse left camera prim or path (default: '/OpenXR/Cameras/left_camera')
         right_camera: str, pxr.Sdf.Path or pxr.Usd.Prim, optional
             Omniverse right camera prim or path (default: '/OpenXR/Cameras/right_camera')
-        reference_position: pxr.Gf.Vec3d or None, optional
-            Cartesian position (in centimeters) used as reference (default: pxr.Gf.Vec3d(0, 0, 0))
-        reference_rotation: pxr.Gf.Vec3d or None, optional
-            Rotation (in degress) on each axis used as reference (default: pxr.Gf.Vec3d(90, 0, 0))
         camera_properties: dict
             Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: {"focalLength": 10})
         """
@@ -688,9 +680,6 @@ class OpenXR:
                     window.set_camera_target(camera, 0.0, 0.0, 0.0, True)
             return window
         
-        self._reference_position = reference_position
-        self._reference_rotation = reference_rotation
-
         stage = omni.usd.get_context().get_stage()
 
         # left camera
@@ -751,6 +740,20 @@ class OpenXR:
         else:
             return tuple([(view["recommendedImageRectWidth"], view["recommendedImageRectHeight"]) for view in self._app.getViewConfigurationViews()])
 
+    def set_reference_system_pose(self, position: Union[pxr.Gf.Vec3d, None] = None, rotation: Union[pxr.Gf.Vec3d, None] = None) -> None:
+        """
+        Set the pose of the origin of the reference system
+
+        Parameters
+        ----------
+        position: pxr.Gf.Vec3d or None, optional
+            Cartesian position (in centimeters) (default: None)
+        rotation: pxr.Gf.Vec3d or None, optional
+            Rotation (in degress) on each axis (default: None)
+        """
+        self._reference_position = position
+        self._reference_rotation = rotation
+
     def set_stereo_rectification(self, x: float = 0, y: float = 0, z: float = 0) -> None:
         """
         Set the angle (in radians) of the rotation axes for stereoscopic view rectification
@@ -804,9 +807,9 @@ class OpenXR:
         rotation: pxr.Gf.Quatd
             Rotation (as quaternion) used to transform the prim
         reference_position: pxr.Gf.Vec3d or None, optional
-            Cartesian position (in centimeters) used as reference (default: None)
+            Cartesian position (in centimeters) used as reference system (default: None)
         reference_rotation: pxr.Gf.Vec3d or None, optional
-            Rotation (in degress) on each axis used as reference (default: None)
+            Rotation (in degress) on each axis used as reference system (default: None)
         """
         properties = prim.GetPropertyNames()
 
