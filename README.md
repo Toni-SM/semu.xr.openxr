@@ -9,6 +9,7 @@
 - [Add the extension to a NVIDIA Omniverse app and enable it](#extension)
 - [Diagrams](#diagrams)
 - [Sample code](#sample)
+- [GUI launcher](#gui)
 - [Extension API](#api)
   - [Acquiring extension interface](#api-interface)
   - [API](#api-functions)
@@ -38,7 +39,7 @@
 High-level overview of extension usage, including the order of function calls, callbacks and the action and rendering loop
 
 <p align="center">
-  <img src="https://user-images.githubusercontent.com/22400377/136704217-66fbb7a8-1ee0-4035-b268-61c30da71f17.png" width="55%">
+  <img src="https://user-images.githubusercontent.com/22400377/137474691-cdc1aeee-2c34-40ef-82f2-f2aa13587c45.png" width="55%">
 </p>
 
 Typical OpenXR application showing the grouping of the standard functions under the compact binding provided by the extension (adapted from [openxr-10-reference-guide.pdf](https://www.khronos.org/registry/OpenXR/specs/1.0/refguide/openxr-10-reference-guide.pdf))
@@ -101,6 +102,21 @@ physx_subs = omni.physx.get_physx_interface().subscribe_physics_step_events(on_s
 ```
 
 [Watch the sample video](https://user-images.githubusercontent.com/22400377/136706132-cc96dc22-235d-454d-a145-a65f6a35c9f2.mp4)
+
+<br>
+
+<a name="gui"></a>
+### GUI launcher
+
+The extension also provides a graphical user interface that helps to launch a partially configurable OpenXR application form a window. This interface is located in the *Add-ons > OpenXR UI* menu
+
+The first four options (Graphics API, Form factor, Blend mode, View configuration type) cannot be modified once the OpenXR application is running. They are used to create and configure the OpenXR instance, system and session
+
+The other options (under the central separator) can be modified while the application is running. They help to modify the pose of the reference system, or to perform transformations on the images to be rendered, for example.
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/22400377/137474713-b148ded7-0ece-4d8c-aa30-79244920cf64.png" width="65%">
+</p>
 
 <br>
 
