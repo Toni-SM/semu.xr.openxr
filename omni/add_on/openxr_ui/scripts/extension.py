@@ -1,3 +1,4 @@
+import math
 import pxr
 import weakref
 import omni.ext
@@ -40,7 +41,7 @@ class Extension(omni.ext.IExt):
         return {"fit": transform_fit, "flip": transform_flip}
 
     def _get_stereo_rectification(self):
-        return [self._xr_settings_stereo_rectification.model.get_item_value_model(i).as_float for i in self._xr_settings_stereo_rectification.model.get_item_children()]
+        return [self._xr_settings_stereo_rectification.model.get_item_value_model(i).as_float * math.pi / 180.0 for i in self._xr_settings_stereo_rectification.model.get_item_children()]
 
     def _menu_callback(self):
         self._build_ui()
@@ -160,7 +161,7 @@ class Extension(omni.ext.IExt):
                     ui.Spacer(height=5)
                     with ui.HStack(height=0):
                         ui.Label("  |-- Rotation (XYZ):", width=110, tooltip="Rotation (in degress) on each axis used as reference origin")
-                        self._xr_settings_space_origin_rotation = ui.MultiIntDragField(90, 0, 0, min=-180, max=180)
+                        self._xr_settings_space_origin_rotation = ui.MultiIntDragField(0, 0, 0, min=-180, max=180)
 
                     ui.Spacer(height=5)
                     with ui.HStack(height=0):
@@ -170,7 +171,7 @@ class Extension(omni.ext.IExt):
 
                     ui.Spacer(height=5)
                     with ui.HStack(height=0):
-                        ui.Label("Stereo rectification (x,y,z):", width=150, tooltip="Angle (in radians) on each rotation axis for stereoscopic rectification")
+                        ui.Label("Stereo rectification (x,y,z):", width=150, tooltip="Angle (in degrees) on each rotation axis for stereoscopic rectification")
                         self._xr_settings_stereo_rectification = ui.MultiFloatDragField(0.0, 0.0, 0.0, min=-10, max=10, step=0.1)
                     
                     ui.Spacer(height=5)
