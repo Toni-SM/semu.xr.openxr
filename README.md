@@ -121,7 +121,7 @@ The other options (under the central separator) can be modified while the applic
 <br>
 
 <a name="api"></a>
-### API
+### Extension API
 
 <a name="api-interface"></a>
 #### Acquiring extension interface
