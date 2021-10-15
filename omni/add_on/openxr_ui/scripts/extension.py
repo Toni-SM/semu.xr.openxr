@@ -121,9 +121,16 @@ class Extension(omni.ext.IExt):
             self._xr.set_stereo_rectification(*self._get_stereo_rectification())
             self._xr.set_frame_transformations(**self._get_frame_transformations())
             # action and rendering loop
-            if self._xr.poll_events() and self._xr.is_session_running():
-                self._xr.poll_actions()
-                self._xr.render_views(self._get_reference_space())
+            if not self._xr.poll_events():
+                self._on_stop_openxr()
+                return
+            if self._xr.is_session_running():
+                if not self._xr.poll_actions():
+                    self._on_stop_openxr()
+                    return
+                if not self._xr.render_views(self._get_reference_space()):
+                    self._on_stop_openxr()
+                    return
 
     def _build_ui(self):
         if not self._window:
