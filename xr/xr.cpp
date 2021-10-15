@@ -784,6 +784,8 @@ public:
 	OpenXrApplication();
 	~OpenXrApplication();
 
+    void destroy();
+
 	bool createInstance(const string &, const string &, const vector<string> &, const vector<string> &);
 	bool getSystem(XrFormFactor, XrEnvironmentBlendMode, XrViewConfigurationType); 
 	bool createSession();
@@ -810,16 +812,33 @@ OpenXrApplication::OpenXrApplication(){
 }
 
 OpenXrApplication::~OpenXrApplication(){
+	destroy();
+}
+
+void OpenXrApplication::destroy(){
 	if(xr_instance != NULL){
+		std::cout << "Destroying OpenXR application" << std::endl;
+		
+		for(size_t i = 0; i < xr_actions.aPose.size(); i++)
+			xrDestroySpace(xr_actions.aPose[i].space);
+
+		xrDestroyActionSet(xr_action_set);
+
+		for(size_t i = 0; i < xr_swapchains_handlers.size(); i++)
+			xrDestroySwapchain(xr_swapchains_handlers[i].handle);
+
 		xrDestroySpace(xr_space_view);
 		xrDestroySpace(xr_space_local);
 		xrDestroySpace(xr_space_stage);
 
-		for(size_t i = 0; i < xr_actions.aPose.size(); i++)
-			xrDestroySpace(xr_actions.aPose[i].space);
-
 		xrDestroySession(xr_session);
 		xrDestroyInstance(xr_instance);
+		
+		xr_instance = {};
+		xr_system_id = XR_NULL_SYSTEM_ID;
+		xr_session = {};
+
+		std::cout << "OpenXR application destroyed" << std::endl;
 	}
 }
 
@@ -2245,6 +2264,7 @@ int main(){
 extern "C"
 {
     OpenXrApplication * openXrApplication(){ return new OpenXrApplication(); }
+    void destroy(OpenXrApplication * app){ app->destroy(); }
 
 	// utils
     bool isSessionRunning(OpenXrApplication * app){ 

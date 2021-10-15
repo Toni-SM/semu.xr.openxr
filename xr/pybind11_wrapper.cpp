@@ -129,6 +129,7 @@ PYBIND11_MODULE(xrlib_p, m){
     py::class_<OpenXrApplication>(m, "OpenXrApplication")
         .def(py::init<>())
         // utils
+        .def("destroy", &OpenXrApplication::destroy)
         .def("isSessionRunning", &OpenXrApplication::isSessionRunning)
         .def("getViewConfigurationViews", &OpenXrApplication::getViewConfigurationViews)
         .def("getViewConfigurationViewsSize", &OpenXrApplication::getViewConfigurationViewsSize)

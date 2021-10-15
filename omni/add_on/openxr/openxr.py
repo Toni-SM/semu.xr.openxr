@@ -66,6 +66,7 @@ def acquire_openxr_interface():
 def release_openxr_interface(xr):
     if xr is not None:
         xr.destroy()
+        xr = None
 
 
 
@@ -225,8 +226,16 @@ class OpenXR:
         return True
 
     def destroy(self):
-        # TODO: implement
-        pass
+        """
+        Destroy OpenXR application
+        """
+        if self._app is not None:
+            if self._use_ctypes:
+                return bool(self._lib.destroy(self._app))
+            else:
+                return self._app.destroy()
+        self._lib = None
+        self._app = None
 
     def is_session_running(self) -> bool:
         """
