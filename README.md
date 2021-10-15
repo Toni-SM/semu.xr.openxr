@@ -1,4 +1,4 @@
-## OpenXR compact binding to create extended reality applications on NVIDIA Omniverse
+## OpenXR compact binding for creating extended reality applications on NVIDIA Omniverse
 
 > This extension provides a compact python binding (on top of the open standard [OpenXR](https://www.khronos.org/openxr/) for augmented reality (AR) and virtual reality (VR)) to create extended reality applications taking advantage of NVIDIA Omniverse rendering capabilities. In addition to updating views (e.g., head-mounted display), it enables subscription to any input event (e.g., controller buttons and triggers) and execution of output actions (e.g., haptic vibration) through a simple and efficient API for accessing conformant devices such as HTC Vive, Oculus and others...
 
