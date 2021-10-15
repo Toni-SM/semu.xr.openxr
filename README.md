@@ -1,6 +1,6 @@
 ## OpenXR compact binding to create extended reality applications on NVIDIA Omniverse
 
-> This extension provides a compact python binding (on top of the open standard [OpenXR](https://www.khronos.org/openxr/) for augmented reality (AR) and virtual reality (VR)) to create extended reality applications taking advantage of NVIDIA Omniverse rendering capabilities. In addition to updating views (e.g., head-mounted display), it enables subscription to any input event (e.g., controller buttons and triggers) and execution of output actions (e.g., haptic vibration) through a simple and efficient API
+> This extension provides a compact python binding (on top of the open standard [OpenXR](https://www.khronos.org/openxr/) for augmented reality (AR) and virtual reality (VR)) to create extended reality applications taking advantage of NVIDIA Omniverse rendering capabilities. In addition to updating views (e.g., head-mounted display), it enables subscription to any input event (e.g., controller buttons and triggers) and execution of output actions (e.g., haptic vibration) through a simple and efficient API for accessing conformant devices such as HTC Vive, Oculus and others...
 
 <br>
 
@@ -13,6 +13,26 @@
 - [Extension API](#api)
   - [Acquiring extension interface](#api-interface)
   - [API](#api-functions)
+    - [```init```](#method-init)
+    - [```is_session_running```](#method-is_session_running)
+    - [```create_instance```](#method-create_instance)
+    - [```get_system```](#method-get_system)
+    - [```create_session```](#method-create_session)
+    - [```poll_events```](#method-poll_events)
+    - [```poll_actions```](#method-poll_actions)
+    - [```render_views```](#method-render_views)
+    - [```subscribe_action_event```](#method-subscribe_action_event)
+    - [```apply_haptic_feedback```](#method-apply_haptic_feedback)
+    - [```stop_haptic_feedback```](#method-stop_haptic_feedback)
+    - [```setup_mono_view```](#method-setup_mono_view)
+    - [```setup_stereo_view```](#method-setup_stereo_view)
+    - [```get_recommended_resolutions```](#method-get_recommended_resolutions)
+    - [```set_reference_system_pose```](#method-set_reference_system_pose)
+    - [```set_stereo_rectification```](#method-set_stereo_rectification)
+    - [```set_frame_transformations```](#method-set_frame_transformations)
+    - [```teleport_prim```](#method-teleport_prim)
+    - [```subscribe_render_event```](#method-subscribe_render_event)
+    - [```set_frames```](#method-set_frames)
   - [Available enumerations](#api-enumerations)
   - [Available constants](#api-constants)
 
@@ -50,6 +70,10 @@ Typical OpenXR application showing the grouping of the standard functions under 
 
 <a name="sample"></a>
 ### Sample code
+
+The following sample code shows a typical workflow that configures and renders on a stereo headset the view generated in an Omniverse application. It configures and subscribes two input actions to the left controller to 1) mirror on a simulated sphere the pose of the controller and 2) change the dimensions of the sphere based on the position of the trigger. In addition, an output action, a haptic vibration, is configured and executed when the controller trigger reaches its maximum position
+
+A short video, after the code, shows a test of the OpenXR application from the Script Editor using an HTC Vive Pro
 
 ```python
 import omni
@@ -143,6 +167,7 @@ The other options (under the central separator) can be modified while the applic
 
 The following functions are provided on the OpenXR interface:
 
+<a name="method-init"></a>
 - Init OpenXR application by loading the necessary libraries
 
   ```python
@@ -163,6 +188,7 @@ The following functions are provided on the OpenXR interface:
 
     ```True``` if initialization was successful, otherwise ```False```
 
+<a name="method-is_session_running"></a>
 - Get OpenXR session's running status
 
   ```python
@@ -174,6 +200,7 @@ The following functions are provided on the OpenXR interface:
     
     Return ```True``` if the OpenXR session is running, ```False``` otherwise
 
+<a name="method-create_instance"></a>
 - Create an OpenXR instance to allow communication with an OpenXR runtime
 
   ```python
@@ -202,7 +229,7 @@ The following functions are provided on the OpenXR interface:
     
     ```True``` if the instance has been created successfully, otherwise ```False```
 
-
+<a name="method-get_system"></a>
 - Obtain the system represented by a collection of related devices at runtime
 
   ```python
@@ -227,6 +254,7 @@ The following functions are provided on the OpenXR interface:
     
     ```True``` if the system has been obtained successfully, otherwise ```False```
 
+<a name="method-create_session"></a>
 - Create an OpenXR session that represents an application's intention to display XR content
 
   ```python
@@ -238,6 +266,7 @@ The following functions are provided on the OpenXR interface:
     
     ```True``` if the session has been created successfully, otherwise ```False```
 
+<a name="method-poll_events"></a>
 - [Event polling](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#event-polling) and processing
 
   ```python
@@ -249,6 +278,7 @@ The following functions are provided on the OpenXR interface:
     
     ```False``` if the running session needs to end (due to the user closing or switching the application, etc.), otherwise ```False```
 
+<a name="method-poll_actions"></a>
 - [Action](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_action_overview) polling
 
   ```python
@@ -260,6 +290,7 @@ The following functions are provided on the OpenXR interface:
     
     ```True``` if there is no error during polling, otherwise ```False```
 
+<a name="method-render_views"></a>
 - Present rendered images to the user's views according to the selected reference space
 
   ```python
@@ -276,8 +307,7 @@ The following functions are provided on the OpenXR interface:
     
     ```True``` if there is no error during rendering, otherwise ```False```
 
-
-
+<a name="method-subscribe_action_event"></a>
 - Create an action given a path and subscribe a callback function to the update event of this action
 
   ```python
@@ -347,6 +377,7 @@ The following functions are provided on the OpenXR interface:
     
     ```True``` if there is no error during action creation, otherwise ```False```
 
+<a name="method-apply_haptic_feedback"></a>
 - Apply a [haptic feedback](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_output_actions_and_haptics) to a device defined by a path (user path and subpath)
 
   ```python
@@ -367,6 +398,7 @@ The following functions are provided on the OpenXR interface:
     
     ```True``` if there is no error during the haptic feedback application, otherwise ```False```
 
+<a name="method-stop_haptic_feedback"></a>
 - Stop a [haptic feedback](https://www.khronos.org/registry/OpenXR/specs/1.0/html/xrspec.html#_output_actions_and_haptics) applied to a device defined by a path (user path and subpath)
 
   ```python
@@ -383,6 +415,7 @@ The following functions are provided on the OpenXR interface:
     
     ```True``` if there is no error during the haptic feedback stop, otherwise ```False```
 
+<a name="method-setup_mono_view"></a>
 - Setup Omniverse viewport and camera for monoscopic rendering
 
   ```python
@@ -400,6 +433,7 @@ The following functions are provided on the OpenXR interface:
     
     Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: ```{"focalLength": 10}```)
 
+<a name="method-setup_stereo_view"></a>
 - Setup Omniverse viewports and cameras for stereoscopic rendering
 
   ```python
@@ -421,6 +455,7 @@ The following functions are provided on the OpenXR interface:
     
     Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: ```{"focalLength": 10}```)
 
+<a name="method-get_recommended_resolutions"></a>
 - Get the recommended resolution of the display device
 
   ```python
@@ -432,6 +467,7 @@ The following functions are provided on the OpenXR interface:
     
     Tuple containing the recommended resolutions (width, height) of each device view. If the tuple length is 2, index 0 represents the left eye and index 1 represents the right eye
 
+<a name="method-set_reference_system_pose"></a>
 - Set the pose of the origin of the reference system
 
   ```python
@@ -447,6 +483,7 @@ The following functions are provided on the OpenXR interface:
     
     Rotation (in degress) on each axis (default: ```None```)
 
+<a name="method-set_stereo_rectification"></a>
 - Set the angle (in radians) of the rotation axes for stereoscopic view rectification
 
   ```python
@@ -466,6 +503,7 @@ The following functions are provided on the OpenXR interface:
     
     Angle (in radians) of the Z-axis (default: 0)
 
+<a name="method-set_frame_transformations"></a>
 - Specify the transformations to be applied to the rendered images
 
   ```python
@@ -481,6 +519,7 @@ The following functions are provided on the OpenXR interface:
     
     Flip each image around vertical (0), horizontal (1), or both axes (0,1) (default: ```None```) 
 
+<a name="method-teleport_prim"></a>
 - Teleport the prim specified by the given transformation (position and rotation)
 
   ```python
@@ -508,6 +547,7 @@ The following functions are provided on the OpenXR interface:
     
     Rotation (in degress) on each axis used as reference system (default: ```None```)
 
+<a name="method-subscribe_render_event"></a>
 - Subscribe a callback function to the render event
 
   ```python
@@ -537,6 +577,7 @@ The following functions are provided on the OpenXR interface:
     
     Callback invoked on each render event (default: ```None```)
 
+<a name="method-set_frames"></a>
 - Pass to the selected graphics API the images to be rendered in the views
 
   ```python
