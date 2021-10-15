@@ -11,3 +11,7 @@ python -m pip install --upgrade pip
 python -m pip install pybind11
 python -m pip install Cython
 ```
+
+```bash
+apt-get install libx11-dev
+```

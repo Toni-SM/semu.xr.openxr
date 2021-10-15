@@ -8,8 +8,8 @@ rm xrapp
 # set variables
 export OPENXR_DIR=$(pwd)"/thirdparty/openxr-1.0.19"
 export VULKAN_DIR=$(pwd)"/thirdparty/vulkan-1.0.49.0"
+export OPENGL_DIR=$(pwd)"/thirdparty/opengl"
 export SDL_DIR=$(pwd)"/thirdparty/sdl2"
-export OPENGL_DIR="/usr"
 
 export DFLAGS="-DAPPLICATION -DCTYPES"
 export CFLAGS="-std=c++17 -pthread -O2 -fpermissive -Wwrite-strings"

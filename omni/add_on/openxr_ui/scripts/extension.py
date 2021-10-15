@@ -28,6 +28,11 @@ class Extension(omni.ext.IExt):
         reference_space = [_openxr.XR_REFERENCE_SPACE_TYPE_VIEW, _openxr.XR_REFERENCE_SPACE_TYPE_LOCAL, _openxr.XR_REFERENCE_SPACE_TYPE_STAGE]
         return reference_space[self._xr_settings_reference_space.model.get_item_value_model().as_int]
 
+    def _get_origin_pose(self):
+        space_origin_position = [self._xr_settings_space_origin_position.model.get_item_value_model(i).as_int for i in self._xr_settings_space_origin_position.model.get_item_children()]
+        space_origin_rotation = [self._xr_settings_space_origin_rotation.model.get_item_value_model(i).as_int for i in self._xr_settings_space_origin_rotation.model.get_item_children()]
+        return {"position": pxr.Gf.Vec3d(*space_origin_position), "rotation": pxr.Gf.Vec3d(*space_origin_rotation)}
+
     def _get_frame_transformations(self):
         transform_fit = self._xr_settings_transform_fit.model.get_value_as_bool()
         transform_flip = [None, 0, 1, (0,1)]
@@ -54,18 +59,11 @@ class Extension(omni.ext.IExt):
         view_configuration_type = [_openxr.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO, _openxr.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO]
         view_configuration_type = view_configuration_type[self._xr_settings_view_configuration_type.model.get_item_value_model().as_int]
 
-        space_origin_position = [self._xr_settings_space_origin_position.model.get_item_value_model(i).as_int for i in self._xr_settings_space_origin_position.model.get_item_children()]
-        space_origin_position = pxr.Gf.Vec3d(*space_origin_position)
-
-        space_origin_rotation = [self._xr_settings_space_origin_rotation.model.get_item_value_model(i).as_int for i in self._xr_settings_space_origin_rotation.model.get_item_children()]
-
         # disable static parameters ui
         self._xr_settings_graphics_api.enabled = False
         self._xr_settings_form_factor.enabled = False
         self._xr_settings_blend_mode.enabled = False
         self._xr_settings_view_configuration_type.enabled = False
-        self._xr_settings_space_origin_position.enabled = False
-        self._xr_settings_space_origin_rotation.enabled = False
 
         if self._xr is None:
             self._xr = _openxr.acquire_openxr_interface()
@@ -79,9 +77,9 @@ class Extension(omni.ext.IExt):
                     if self._xr.create_session():    
                         # setup cameras and viewports and prepare rendering using the internal callback
                         if view_configuration_type == _openxr.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
-                            self._xr.setup_stereo_view(reference_position=space_origin_position, reference_rotation=space_origin_rotation)
+                            self._xr.setup_mono_view()
                         elif view_configuration_type == _openxr.XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-                            self._xr.setup_stereo_view(reference_position=space_origin_position, reference_rotation=space_origin_rotation)
+                            self._xr.setup_stereo_view()
                         # enable/disable buttons
                         self._ui_start_xr.enabled = False
                         self._ui_stop_xr.enabled = True
@@ -109,8 +107,6 @@ class Extension(omni.ext.IExt):
         self._xr_settings_form_factor.enabled = True
         self._xr_settings_blend_mode.enabled = True
         self._xr_settings_view_configuration_type.enabled = True
-        self._xr_settings_space_origin_position.enabled = True
-        self._xr_settings_space_origin_rotation.enabled = True
 
         # enable/disable buttons
         self._ui_start_xr.enabled = True
@@ -118,6 +114,8 @@ class Extension(omni.ext.IExt):
 
     def _on_simulation_step(self, step):
         if self._ready and self._xr is not None:
+            # origin
+            self._xr.set_reference_system_pose(**self._get_origin_pose())
             # transformation and rectification
             self._xr.set_stereo_rectification(*self._get_stereo_rectification())
             self._xr.set_frame_transformations(**self._get_frame_transformations())
@@ -150,6 +148,9 @@ class Extension(omni.ext.IExt):
                         self._xr_settings_view_configuration_type = ui.ComboBox(1, "Mono", "Stereo")
 
                     ui.Spacer(height=5)
+                    ui.Separator(height=1, width=0)
+                    ui.Spacer(height=5)
+
                     with ui.HStack(height=0):
                         ui.Label("Space origin:", width=85)
                     ui.Spacer(height=5)
@@ -162,9 +163,6 @@ class Extension(omni.ext.IExt):
                         self._xr_settings_space_origin_rotation = ui.MultiIntDragField(90, 0, 0, min=-180, max=180)
 
                     ui.Spacer(height=5)
-                    ui.Separator(height=1, width=0)
-                    ui.Spacer(height=5)
-
                     with ui.HStack(height=0):
                         style = {"Tooltip": {"width": 50, "word-wrap": "break-word"}}
                         ui.Label("Reference space (views):", width=145, tooltip="XrReferenceSpaceType enum. VIEW: track the view origin for the primary viewer. LOCAL: establish a world-locked origin. STAGE: runtime-defined space that can be walked around on", style=style)

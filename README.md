@@ -370,7 +370,7 @@ The following functions are provided on the OpenXR interface:
 - Setup Omniverse viewport and camera for monoscopic rendering
 
   ```python
-  setup_mono_view(camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0), camera_properties: dict = {"focalLength": 10}) -> None
+  setup_mono_view(camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/camera", camera_properties: dict = {"focalLength": 10}) -> None
   ```
 
   This method obtains the viewport window for the given camera. If the viewport window does not exist, a new one is created and the camera is set as active. If the given camera does not exist, a new camera is created with the same path and set to the recommended resolution of the display device
@@ -380,14 +380,6 @@ The following functions are provided on the OpenXR interface:
     
     Omniverse camera prim or path (default: */OpenXR/Cameras/camera*)
   
-  - reference_position: ```pxr.Gf.Vec3d``` or ```None```, optional
-    
-    Cartesian position (in centimeters) used as reference (default: ```pxr.Gf.Vec3d(0, 0, 0)```)
-    
-  - reference_rotation: ```pxr.Gf.Vec3d``` or ```None```, optional
-    
-    Rotation (in degress) on each axis used as reference (default: ```pxr.Gf.Vec3d(90, 0, 0)```)
-
   - camera_properties: ```dict```
     
     Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: ```{"focalLength": 10}```)
@@ -395,7 +387,7 @@ The following functions are provided on the OpenXR interface:
 - Setup Omniverse viewports and cameras for stereoscopic rendering
 
   ```python
-  setup_stereo_view(left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim, None] = "/OpenXR/Cameras/right_camera", reference_position: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(0,0,0), reference_rotation: Union[pxr.Gf.Vec3d, None] = Gf.Vec3d(90,0,0), camera_properties: dict = {"focalLength": 10}) -> None
+  setup_stereo_view(left_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim] = "/OpenXR/Cameras/left_camera", right_camera: Union[str, pxr.Sdf.Path, pxr.Usd.Prim, None] = "/OpenXR/Cameras/right_camera", camera_properties: dict = {"focalLength": 10}) -> None
   ```
 
   This method obtains the viewport window for each camera. If the viewport window does not exist, a new one is created and the camera is set as active. If the given cameras do not exist, new cameras are created with the same path and set to the recommended resolution of the display device
@@ -408,14 +400,6 @@ The following functions are provided on the OpenXR interface:
   - right_camera: ```str```, ```pxr.Sdf.Path``` or ```pxr.Usd.Prim```, optional
     
     Omniverse right camera prim or path (default: */OpenXR/Cameras/right_camera*)
-    
-  - reference_position: ```pxr.Gf.Vec3d``` or ```None```, optional
-    
-    Cartesian position (in centimeters) used as reference origin (default: ```pxr.Gf.Vec3d(0, 0, 0)```)
-    
-  - reference_rotation: ```pxr.Gf.Vec3d``` or ```None```, optional
-    
-    Rotation (in degress) on each axis used as reference origin (default: ```pxr.Gf.Vec3d(90, 0, 0)```)x
     
   - camera_properties: ```dict```
     
@@ -431,6 +415,21 @@ The following functions are provided on the OpenXR interface:
   - ```tuple```
     
     Tuple containing the recommended resolutions (width, height) of each device view. If the tuple length is 2, index 0 represents the left eye and index 1 represents the right eye
+
+- Set the pose of the origin of the reference system
+
+  ```python
+  set_reference_system_pose(position: Union[pxr.Gf.Vec3d, None] = None, rotation: Union[pxr.Gf.Vec3d, None] = None) -> None
+  ```
+  
+  Parameters:
+  - position: ```pxr.Gf.Vec3d``` or ```None```, optional
+
+    Cartesian position (in centimeters) (default: ```None```)
+  
+  - rotation: ```pxr.Gf.Vec3d``` or ```None```, optional
+    
+    Rotation (in degress) on each axis (default: ```None```)
 
 - Set the angle (in radians) of the rotation axes for stereoscopic view rectification
 
@@ -487,11 +486,11 @@ The following functions are provided on the OpenXR interface:
     
   - reference_position: ```pxr.Gf.Vec3d``` or ```None```, optional
     
-    Cartesian position (in centimeters) used as reference (default: ```None```)
+    Cartesian position (in centimeters) used as reference system (default: ```None```)
     
   - reference_rotation: ```pxr.Gf.Vec3d``` or ```None```, optional
     
-    Rotation (in degress) on each axis used as reference (default: ```None```)
+    Rotation (in degress) on each axis used as reference system (default: ```None```)
 
 - Subscribe a callback function to the render event
 
