@@ -6,7 +6,7 @@
 
 ### Table of Contents
 
-- [Add the extension to a NVIDIA Omniverse app and enable it](#extension)
+- [Add the extension to an NVIDIA Omniverse app and enable it](#extension)
 - [Diagrams](#diagrams)
 - [Sample code](#sample)
 - [GUI launcher](#gui)
@@ -39,7 +39,7 @@
 <br>
 
 <a name="extension"></a>
-### Add the extension to a NVIDIA Omniverse app and enable it
+### Add the extension to an NVIDIA Omniverse app and enable it
 
 1. Add the the extension by following the steps described in [Extension Search Paths](https://docs.omniverse.nvidia.com/py/kit/docs/guide/extensions.html#extension-search-paths) or simply download and unzip the latest [release](https://github.com/Toni-SM/omni.add_on.openxr/releases) in one of the extension folders such as ```omniverse-apps/exts```
 
