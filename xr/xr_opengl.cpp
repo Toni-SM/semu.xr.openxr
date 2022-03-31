@@ -30,8 +30,8 @@ OpenGLHandler::~OpenGLHandler(){
 /*
  *	Loads a texture from a file
  *
- *	@param[in] filename - the file to load
- *	@param[out] texture - the texture to load into
+ *	@param[in] path - the path to the image file
+ *	@param[out] textureId - the texture id to load the image into
  */
 void OpenGLHandler::loadTexture(string path, GLuint * textureId){
 #ifdef APPLICATION_IMAGE
@@ -62,9 +62,9 @@ void OpenGLHandler::loadTexture(string path, GLuint * textureId){
  *	@returns true if the shader is valid, false otherwise
  */
 bool OpenGLHandler::checkShader(GLuint shader){
-	GLint r = 0;
-	glGetShaderiv(shader, GL_COMPILE_STATUS, &r);
-	if(r == GL_FALSE){
+	GLint status = 0;
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+	if(status == GL_FALSE){
 		GLchar msg[4096] = {};
 		GLsizei length;
 		glGetShaderInfoLog(shader, sizeof(msg), &length, msg);
@@ -80,14 +80,14 @@ bool OpenGLHandler::checkShader(GLuint shader){
  *	@param[in] program - the program to check
  *	@returns true if the program is valid, false otherwise
  */
-bool OpenGLHandler::checkProgram(GLuint prog) {
-	GLint r = 0;
-	glGetProgramiv(prog, GL_LINK_STATUS, &r);
-	if(r == GL_FALSE){
+bool OpenGLHandler::checkProgram(GLuint prog){
+	GLint status = 0;
+	glGetProgramiv(prog, GL_LINK_STATUS, &status);
+	if(status == GL_FALSE){
 		GLchar msg[4096] = {};
 		GLsizei length;
 		glGetProgramInfoLog(prog, sizeof(msg), &length, msg);
-		std::cout << "GL SHADER: " << msg << std::endl;
+		std::cout << "GL PROGRAM: " << msg << std::endl;
 		return false;
 	}
 	return true;
@@ -95,10 +95,10 @@ bool OpenGLHandler::checkProgram(GLuint prog) {
 
 #ifdef XR_USE_PLATFORM_XLIB
 /*
- *	Acquires a lost context
+ *	Acquire a lost context
  *
- * Some OpenXR functions change the current OpenGL context in Linux.
- * https://github.com/ValveSoftware/SteamVR-for-Linux/issues/421
+ *	Some OpenXR functions change the current OpenGL context in Linux.
+ *	https://github.com/ValveSoftware/SteamVR-for-Linux/issues/421
  *
  *  @param[in] graphicsBinding - the graphics binding to use
  *  @param[in] message - the message to display
@@ -111,7 +111,7 @@ void OpenGLHandler::acquireContext(XrGraphicsBindingOpenGLXlibKHR graphicsBindin
 }
 
 /*
- *	Initializes the graphics binding for OpenGL
+ *	Initialize the graphics binding for OpenGL
  *
  *  SDL library is used to create a window and OpenGL context
  *
@@ -161,7 +161,7 @@ bool OpenGLHandler::initGraphicsBinding(Display** xDisplay, uint32_t* visualid, 
 
 #ifdef XR_USE_PLATFORM_WIN32
 /*
- *	Acquires a lost context
+ *	Acquire a lost context
  *
  *  @param[in] graphicsBinding - the graphics binding to use
  *  @param[in] message - the message to display
@@ -175,7 +175,7 @@ void OpenGLHandler::acquireContext(XrGraphicsBindingOpenGLWin32KHR graphicsBindi
 }
 
 /*
- *	Initializes the graphics binding for OpenGL
+ *	Initialize the graphics binding for OpenGL
  *
  *	@param[out] hDC - the device context
  *	@param[out] hGLRC - the OpenGL rendering context
@@ -222,7 +222,7 @@ bool OpenGLHandler::initGraphicsBinding(HDC* hDC, HGLRC* hRC, int width, int hei
 #endif
 
 /*
- *	Shows thr graphics binding requirements
+ *	Show the graphics requirements
  *
  *	@param[in] xr_instance - the XR instance
  *	@param[in] xr_system_id - the XR system id
@@ -231,12 +231,12 @@ bool OpenGLHandler::initGraphicsBinding(HDC* hDC, HGLRC* hRC, int width, int hei
 bool OpenGLHandler::getRequirements(XrInstance xr_instance, XrSystemId xr_system_id){
 	PFN_xrGetOpenGLGraphicsRequirementsKHR pfn_xrGetOpenGLGraphicsRequirementsKHR = nullptr;
 	xr_result = xrGetInstanceProcAddr(xr_instance, "xrGetOpenGLGraphicsRequirementsKHR", reinterpret_cast<PFN_xrVoidFunction*>(&pfn_xrGetOpenGLGraphicsRequirementsKHR));
-	if(!xrCheckResult(NULL, xr_result, "xrGetOpenGLGraphicsRequirementsKHR (xrGetInstanceProcAddr)"))
-		return false;
+	// if(!xrCheckResult(NULL, xr_result, "xrGetOpenGLGraphicsRequirementsKHR (xrGetInstanceProcAddr)"))
+	// 	return false;
 	XrGraphicsRequirementsOpenGLKHR graphicsRequirement = {XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR};
 	xr_result = pfn_xrGetOpenGLGraphicsRequirementsKHR(xr_instance, xr_system_id, &graphicsRequirement);
-	if(!xrCheckResult(NULL, xr_result, "xrGetOpenGLGraphicsRequirementsKHR"))
-		return false;
+	// if(!xrCheckResult(NULL, xr_result, "xrGetOpenGLGraphicsRequirementsKHR"))
+	// 	return false;
 
 	std::cout << "OpenGL requirements" << std::endl;
 	std::cout << "  |-- min API version: " << XR_VERSION_MAJOR(graphicsRequirement.minApiVersionSupported) << "." << XR_VERSION_MINOR(graphicsRequirement.minApiVersionSupported) << "." << XR_VERSION_PATCH(graphicsRequirement.minApiVersionSupported) << std::endl;
@@ -245,7 +245,7 @@ bool OpenGLHandler::getRequirements(XrInstance xr_instance, XrSystemId xr_system
 }
 
 /*
- *	Initializes resources (shaders, buffers, etc.)
+ *	Initialize resources (shaders, buffers, etc.)
  *
  *	@param[in] xr_instance - the XR instance
  *	@param[in] xr_system_id - the XR system id
@@ -280,6 +280,13 @@ bool OpenGLHandler::initResources(XrInstance xr_instance, XrSystemId xr_system_i
 	return true;
 }
 
+/*
+ *	Render view
+ *
+ *  @param[in] layerView - the layer view
+ *  @param[in] swapchainImage - the swapchain image
+ *  @param[in] swapchainFormat - the swapchain format
+ */
 void OpenGLHandler::renderView(const XrCompositionLayerProjectionView & layerView, const XrSwapchainImageBaseHeader * swapchainImage, int64_t swapchainFormat){
         // render to texture (HMD)
 		glBindFramebuffer(GL_FRAMEBUFFER, swapchainFramebuffer);
@@ -321,6 +328,17 @@ void OpenGLHandler::renderView(const XrCompositionLayerProjectionView & layerVie
 		glUseProgram(0);
 }
 
+/*
+ *	Render view from image
+ *
+ *  @param[in] layerView - the layer view
+ *  @param[in] swapchainImage - the swapchain image
+ *  @param[in] swapchainFormat - the swapchain format
+ *  @param[in] frameWidth - the frame width
+ *  @param[in] frameHeight - the frame height
+ *  @param[in] frameData - the frame data
+ *  @param[in] rgba - true if the frame data is in RGBA format, false otherwise
+ */
 void OpenGLHandler::renderViewFromImage(const XrCompositionLayerProjectionView & layerView, const XrSwapchainImageBaseHeader * swapchainImage, int64_t swapchainFormat, int frameWidth, int frameHeight, void * frameData, bool rgba){
 		// load texture
 		glBindTexture(GL_TEXTURE_2D, texture);

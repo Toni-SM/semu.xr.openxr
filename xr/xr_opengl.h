@@ -23,12 +23,7 @@
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr_reflection.h>
 
-#include <vector>
-#include <stdio.h>
-#include <string.h>
 #include <iostream>
-#include <algorithm>
-#include <functional> 
 using namespace std;
 
 
