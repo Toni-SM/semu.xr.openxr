@@ -2,15 +2,25 @@
 
 ### Linux
 
-Install the following packages or dependencies. Change the `OV_APP` variable to the name of the Omniverse app you want to build for
+Install the following packages or dependencies
 
 ```bash
-cd src/omni.add_on.openxr/xr
 sudo apt install libx11-dev
 ```
 
+Setup a python environment. Change the `OV_APP` variable to the name of the Omniverse app you want to build for
+
 ```bash
-~/.local/share/ov/pkg/OV_APP/kit/python/bin/python3 -m pip install pybind11
+cd src/omni.add_on.openxr/xr
+~/.local/share/ov/pkg/OV_APP/kit/python/bin/python3 -m venv env
+
+# source the env
+source env/bin/activate
+
+# install required packages
+python -m pip install --upgrade pip
+python -m pip install pybind11
+python -m pip install Cython
 ```
 
 #### Build CTYPES-based library
