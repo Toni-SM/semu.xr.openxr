@@ -4,9 +4,15 @@
 
 <br>
 
-### Table of Contents
+**Target applications:** Any NVIDIA Omniverse app with the `omni.syntheticdata` extension installed (e.g., Isaac Sim, Create, etc.)
 
-- [Add the extension to an NVIDIA Omniverse app and enable it](#extension)
+**Supported OS:** Linux
+
+**Changelog:** [CHANGELOG.md](exts/add_on.xr.openxr/docs/CHANGELOG.md)
+
+**Table of Contents:**
+
+- [Extension setup](#setup)
 - [Diagrams](#diagrams)
 - [Sample code](#sample)
 - [GUI launcher](#gui)
@@ -38,20 +44,36 @@
 
 <br>
 
-<a name="extension"></a>
-### Add the extension to an NVIDIA Omniverse app and enable it
+![showcase](https://user-images.githubusercontent.com/22400377/169348883-c0a7461d-9fe2-45af-8c77-4e6d6c105062.png)
 
-1. Add the the extension by following the steps described in [Extension Search Paths](https://docs.omniverse.nvidia.com/py/kit/docs/guide/extensions.html#extension-search-paths) or simply download and unzip the latest [release](https://github.com/Toni-SM/omni.add_on.openxr/releases) in one of the extension folders such as ```omniverse-apps/exts```
+<hr>
 
-2. Enable the extension by following the steps described in [Extension Enabling/Disabling](https://docs.omniverse.nvidia.com/py/kit/docs/guide/extensions.html#extension-enabling-disabling)
+<a name="setup"></a>
+### Extension setup
+
+1. Add the extension using the [Extension Manager](https://docs.omniverse.nvidia.com/prod_extensions/prod_extensions/ext_extension-manager.html) or by following the steps in [Extension Search Paths](https://docs.omniverse.nvidia.com/py/kit/docs/guide/extensions.html#extension-search-paths)
+
+    * Git url (git+https) as extension search path
+    
+        ```
+        git+https://github.com/Toni-SM/add_on.xr.openxr.git?branch=main&dir=exts
+        ```
+
+    * Compressed (.zip) file for import
+
+        [add_on.xr.openxr.zip](https://github.com/Toni-SM/add_on.xr.openxr/releases)
+
+2. Enable the extension using the [Extension Manager](https://docs.omniverse.nvidia.com/prod_extensions/prod_extensions/ext_extension-manager.html) or by following the steps in [Extension Enabling/Disabling](https://docs.omniverse.nvidia.com/py/kit/docs/guide/extensions.html#extension-enabling-disabling)
 
 3. Import the extension into any python code and use it...
 
     ```python
-    from omni.add_on.openxr import _openxr
+    from add_on.xr.openxr import _openxr
     ```
 
-<br>
+4. Or use the [GUI launcher](#gui) to directly dislpay the current stage in the HMD
+
+<hr>
 
 <a name="diagrams"></a>
 ### Diagrams
@@ -66,7 +88,7 @@ Typical OpenXR application showing the grouping of the standard functions under 
 
 ![openxr-application](https://user-images.githubusercontent.com/22400377/136704215-5507bbee-666a-42da-b692-cbf8c08a749b.png)
 
-<br>
+<hr>
 
 <a name="sample"></a>
 ### Sample code
@@ -77,7 +99,7 @@ A short video, after the code, shows a test of the OpenXR application from the S
 
 ```python
 import omni
-from omni.add_on.openxr import _openxr
+from add_on.xr.openxr import _openxr
 
 # create a sphere to mirror the controller's pose
 sphere_prim = omni.usd.get_context().get_stage().DefinePrim("/sphere", "Sphere")
@@ -127,7 +149,7 @@ physx_subs = omni.physx.get_physx_interface().subscribe_physics_step_events(on_s
 
 [Watch the sample video](https://user-images.githubusercontent.com/22400377/136706132-cc96dc22-235d-454d-a145-a65f6a35c9f2.mp4)
 
-<br>
+<hr>
 
 <a name="gui"></a>
 ### GUI launcher
@@ -142,7 +164,7 @@ The other options (under the central separator) can be modified while the applic
   <img src="https://user-images.githubusercontent.com/22400377/137474713-b148ded7-0ece-4d8c-aa30-79244920cf64.png" width="65%">
 </p>
 
-<br>
+<hr>
 
 <a name="api"></a>
 ### Extension API
@@ -153,13 +175,13 @@ The other options (under the central separator) can be modified while the applic
 * Acquire OpenXR interface
 
   ```python
-  _openxr.acquire_openxr_interface() -> omni::add_on::openxr::OpenXR
+  _openxr.acquire_openxr_interface() -> add_on::xr::openxr::OpenXR
   ```
 
 * Release OpenXR interface
 
   ```python
-  _openxr.release_openxr_interface(xr: omni::add_on::openxr::OpenXR) -> None
+  _openxr.release_openxr_interface(xr: add_on::xr::openxr::OpenXR) -> None
   ```
 
 <a name="api-functions"></a>
