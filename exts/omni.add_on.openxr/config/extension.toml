@@ -3,26 +3,36 @@ reloadable = true
 order = 0
 
 [package]
-version = "0.0.1"
+version = "0.0.2-beta"
 category = "Other"
+feature = false
+app = false
 title = "OpenXR (binding)"
 description = "OpenXR compact binding for Omniverse"
 authors = ["Toni-SM"]
-repository = ""
+repository = "https://github.com/Toni-SM/add_on.xr.openxr"
 keywords = ["OpenXR", "XR", "VR"]
 changelog = "docs/CHANGELOG.md"
 readme = "docs/README.md"
 preview_image = "data/preview.png"
 icon = "data/icon.png"
 
+[package.target]
+config = ["release"]
+platform = ["linux-x86_64"]
+python = ["py37", "cp37"]
+
 [dependencies]
 "omni.ui" = {}
 "omni.physx" = {}
 "omni.kit.uiapp" = {}
+"omni.kit.pipapi" = {}
 "omni.syntheticdata" = {}
 "omni.kit.menu.utils" = {}
 "omni.kit.window.viewport" = {}
-"omni.kit.pip_archive" = {} # pulls in numpy and opencv-python
+
+[python.pipapi]
+requirements = ["opencv-python"]
 
 [[python.module]]
 name = "add_on.xr.openxr"
