@@ -1,4 +1,4 @@
-## Building form source
+## Building from source
 
 ### Linux
 
