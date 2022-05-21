@@ -4,7 +4,7 @@
 import omni.kit.test
 
 # Import extension python module we are testing with absolute import path, as if we are external user (other extension)
-from omni.add_on.openxr import _openxr
+from semu.xr.openxr import _openxr
 
 import cv2
 import time

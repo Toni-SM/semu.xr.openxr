@@ -28,7 +28,7 @@
 3. Import the extension into any python code and use it...
 
     ```python
-    from omni.add_on.openxr import _openxr
+    from semu.xr.openxr import _openxr
     ```
 
 <br>
@@ -53,7 +53,7 @@ Typical OpenXR application showing the grouping of the standard functions under 
 
 ```python
 import omni
-from omni.add_on.openxr import _openxr
+from semu.xr.openxr import _openxr
 
 # create a sphere to mirror the controller's pose
 sphere_prim = omni.usd.get_context().get_stage().DefinePrim("/sphere", "Sphere")
@@ -129,13 +129,13 @@ The other options (under the central separator) can be modified while the applic
 * Acquire OpenXR interface
 
   ```python
-  _openxr.acquire_openxr_interface() -> omni::add_on::openxr::OpenXR
+  _openxr.acquire_openxr_interface() -> semu::xr::openxr::OpenXR
   ```
 
 * Release OpenXR interface
 
   ```python
-  _openxr.release_openxr_interface(xr: omni::add_on::openxr::OpenXR) -> None
+  _openxr.release_openxr_interface(xr: semu::xr::openxr::OpenXR) -> None
   ```
 
 <a name="api-functions"></a>

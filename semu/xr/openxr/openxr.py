@@ -185,9 +185,9 @@ class OpenXR:
 
         # libraries path
         if __name__ == "__main__":
-            extension_path = os.getcwd()[:os.getcwd().find("/omni/add_on/openxr")]
+            extension_path = os.getcwd()[:os.getcwd().find("/semu/xr/openxr")]
         else:
-            extension_path = __file__[:__file__.find("/omni/add_on/openxr")]
+            extension_path = __file__[:__file__.find("/semu/xr/openxr")]
         
         try:
             # ctypes

@@ -16,7 +16,7 @@ if not os.path.exists(python_library_dir):
 
 ext_modules = [
     Extension("_openxr",
-              [os.path.join("omni", "add_on", "openxr", "openxr.py")],
+              [os.path.join("semu", "xr", "openxr", "openxr.py")],
               library_dirs=[python_library_dir]),
 ]
 
@@ -24,7 +24,7 @@ for ext in ext_modules:
     ext.cython_directives = {'language_level': "3"}
 
 setup(
-    name = 'omni.add_on.openxr',
+    name = 'semu.xr.openxr',
     cmdclass = {'build_ext': build_ext},
     ext_modules = ext_modules
 )

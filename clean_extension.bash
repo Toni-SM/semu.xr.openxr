@@ -3,5 +3,5 @@
 # delete old files
 rm -r build
 rm *.so
-rm omni/add_on/openxr/*.c
-rm omni/add_on/openxr/*.so
+rm semu/xr/openxr/*.c
+rm semu/xr/openxr/*.so

@@ -25,10 +25,10 @@ icon = "data/icon.png"
 "omni.kit.pip_archive" = {} # pulls in numpy and opencv-python
 
 [[python.module]]
-name = "omni.add_on.openxr"
+name = "semu.xr.openxr"
 
 [[python.module]]
-name = "omni.add_on.openxr_ui"
+name = "semu.xr.openxr_ui"
 
 [[python.module]]
-name = "omni.add_on.openxr.tests"
+name = "semu.xr.openxr.tests"

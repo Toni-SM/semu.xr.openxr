@@ -3,6 +3,6 @@
 ### Linux
 
 ```bash
-cd src/omni.add_on.openxr
+cd src/semu.xr.openxr
 bash compile_extension.bash
 ```
