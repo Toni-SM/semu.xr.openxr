@@ -223,6 +223,8 @@ class OpenXR:
             self._viewport_interface = omni.kit.viewport.get_viewport_interface()
         except Exception as e:
             print("[WARNING] omni.kit.viewport.get_viewport_interface:", e)
+            print("[WARNING] Using legacy omni.kit.viewport_legacy.get_viewport_interface")
+            self._viewport_interface = omni.kit.viewport_legacy.get_viewport_interface()
         return True
 
     def destroy(self) -> bool:
