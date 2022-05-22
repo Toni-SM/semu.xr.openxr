@@ -8,7 +8,7 @@
 
 **Supported OS:** Linux
 
-**Changelog:** [CHANGELOG.md](exts/add_on.xr.openxr/docs/CHANGELOG.md)
+**Changelog:** [CHANGELOG.md](exts/semu.xr.openxr/docs/CHANGELOG.md)
 
 **Table of Contents:**
 
@@ -56,19 +56,19 @@
     * Git url (git+https) as extension search path
     
         ```
-        git+https://github.com/Toni-SM/add_on.xr.openxr.git?branch=main&dir=exts
+        git+https://github.com/Toni-SM/semu.xr.openxr.git?branch=main&dir=exts
         ```
 
     * Compressed (.zip) file for import
 
-        [add_on.xr.openxr.zip](https://github.com/Toni-SM/add_on.xr.openxr/releases)
+        [semu.xr.openxr.zip](https://github.com/Toni-SM/semu.xr.openxr/releases)
 
 2. Enable the extension using the [Extension Manager](https://docs.omniverse.nvidia.com/prod_extensions/prod_extensions/ext_extension-manager.html) or by following the steps in [Extension Enabling/Disabling](https://docs.omniverse.nvidia.com/py/kit/docs/guide/extensions.html#extension-enabling-disabling)
 
 3. Import the extension into any python code and use it...
 
     ```python
-    from add_on.xr.openxr import _openxr
+    from semu.xr.openxr import _openxr
     ```
 
 4. Or use the [GUI launcher](#gui) to directly dislpay the current stage in the HMD
@@ -99,7 +99,7 @@ A short video, after the code, shows a test of the OpenXR application from the S
 
 ```python
 import omni
-from add_on.xr.openxr import _openxr
+from semu.xr.openxr import _openxr
 
 # create a sphere to mirror the controller's pose
 sphere_prim = omni.usd.get_context().get_stage().DefinePrim("/sphere", "Sphere")
@@ -175,13 +175,13 @@ The other options (under the central separator) can be modified while the applic
 * Acquire OpenXR interface
 
   ```python
-  _openxr.acquire_openxr_interface() -> add_on::xr::openxr::OpenXR
+  _openxr.acquire_openxr_interface() -> semu::xr::openxr::OpenXR
   ```
 
 * Release OpenXR interface
 
   ```python
-  _openxr.release_openxr_interface(xr: add_on::xr::openxr::OpenXR) -> None
+  _openxr.release_openxr_interface(xr: semu::xr::openxr::OpenXR) -> None
   ```
 
 <a name="api-functions"></a>
