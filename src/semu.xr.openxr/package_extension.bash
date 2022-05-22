@@ -18,7 +18,7 @@ cp -r data $extension_dir
 cp -r docs $extension_dir
 
 # ui
-cp -r $extension_ui_tree $extension_dir/$extension_ui_tree
+cp -r $extension_ui_tree/* $extension_dir/$extension_ui_tree
 
 # scripts folder
 cp $extension_tree/scripts/extension.py $extension_dir/$extension_tree/scripts
