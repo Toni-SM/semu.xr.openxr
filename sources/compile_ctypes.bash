@@ -2,6 +2,7 @@
 
 # delete old files
 . clean_compiled_files.bash
+rm ../bin/xrlib_c*
 
 # set variables
 export OPENXR_DIR=$(pwd)"/thirdparty/openxr"
@@ -16,13 +17,15 @@ export LDFLAGS="-lopenxr_loader -lGL -lSDL2 -lX11"      # -lvulkan -lSDL2_image 
 
 # generate executable
 # g++ $DFLAGS $CFLAGS $INCFLAGS -o xrapp $CPPFILES xr_opengl.cpp xr.cpp $LIBFLAGS $LDFLAGS
+
 # generate object file
 g++ $DFLAGS $CFLAGS $INCFLAGS -fPIC -c -o xrlib.o xr.cpp $LIBFLAGS $LDFLAGS
+
 # generate shared library
 g++ -shared -Wl,-soname,xrlib_c.so -o xrlib_c.so xrlib.o
 
 # copy compiled file
-cp xrlib_c* ../bin
+cp xrlib_c* ../bin/xrlib_c.so
 
 # delete temporal data
 rm -r build

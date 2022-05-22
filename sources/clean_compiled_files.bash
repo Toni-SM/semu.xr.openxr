@@ -4,4 +4,3 @@
 rm -r build
 rm xrlib*
 rm xrapp*
-rm ../bin/xrlib*

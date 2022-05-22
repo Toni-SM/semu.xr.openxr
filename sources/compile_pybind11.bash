@@ -2,6 +2,7 @@
 
 # delete old files
 . clean_compiled_files.bash
+rm ../bin/xrlib_p*
 
 # compile code
 python pybind11_ext.py build_ext --inplace
