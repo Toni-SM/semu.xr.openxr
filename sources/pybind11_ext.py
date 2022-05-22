@@ -1,6 +1,5 @@
 import os
 import sys
-import glob
 from distutils.core import setup
 
 from pybind11.setup_helpers import Pybind11Extension, build_ext
@@ -17,7 +16,7 @@ if not os.path.exists(python_library_dir):
 
 ext_modules = [
     Pybind11Extension("xrlib_p",
-                      glob.glob('src/*.cpp'),
+                      ["pybind11_wrapper.cpp"],
                       include_dirs=[os.path.join(os.getcwd(), "thirdparty", "openxr", "include"),
                                     os.path.join(os.getcwd(), "thirdparty", "opengl", "include"),
                                     os.path.join(os.getcwd(), "thirdparty", "sdl2")],
@@ -27,9 +26,7 @@ ext_modules = [
                                     python_library_dir],
                       libraries=["openxr_loader", "GL", "SDL2"],
                       extra_link_args=["-Wl,-rpath=./bin"],
-                      undef_macros=["CTYPES", "APPLICATION"],
-                      extra_compile_args=["-DXR_USE_GRAPHICS_API_OPENGL"],
-                     ),
+                      undef_macros=["CTYPES", "APPLICATION"]),
 ]
 
 setup(
