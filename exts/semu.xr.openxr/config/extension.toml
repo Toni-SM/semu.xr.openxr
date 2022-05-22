@@ -7,11 +7,11 @@ version = "0.0.2-beta"
 category = "Other"
 feature = false
 app = false
-title = "OpenXR (binding)"
+title = "OpenXR (compact binding)"
 description = "OpenXR compact binding for Omniverse"
 authors = ["Toni-SM"]
-repository = "https://github.com/Toni-SM/add_on.xr.openxr"
-keywords = ["OpenXR", "XR", "VR"]
+repository = "https://github.com/Toni-SM/semu.xr.openxr"
+keywords = ["OpenXR", "XR", "VR", "AR"]
 changelog = "docs/CHANGELOG.md"
 readme = "docs/README.md"
 preview_image = "data/preview.png"
@@ -35,10 +35,10 @@ python = ["py37", "cp37"]
 requirements = ["opencv-python"]
 
 [[python.module]]
-name = "add_on.xr.openxr"
+name = "semu.xr.openxr"
 
 [[python.module]]
-name = "add_on.xr.openxr_ui"
+name = "semu.xr.openxr_ui"
 
 [[python.module]]
-name = "add_on.xr.openxr.tests"
+name = "semu.xr.openxr.tests"

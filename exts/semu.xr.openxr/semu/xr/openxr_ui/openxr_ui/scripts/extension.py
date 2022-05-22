@@ -5,7 +5,7 @@ import omni.ext
 import omni.ui as ui
 from omni.kit.menu.utils import add_menu_items, remove_menu_items, MenuItemDescription
 
-from add_on.xr.openxr import _openxr
+from semu.xr.openxr import _openxr
 
 
 class Extension(omni.ext.IExt):
