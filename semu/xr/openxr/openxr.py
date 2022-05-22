@@ -225,9 +225,14 @@ class OpenXR:
             print("[WARNING] omni.kit.viewport.get_viewport_interface:", e)
         return True
 
-    def destroy(self):
+    def destroy(self) -> bool:
         """
         Destroy OpenXR application
+
+        Returns
+        -------
+        bool
+            True if destruction was successful, otherwise False
         """
         if self._app is not None:
             if self._use_ctypes:
@@ -236,6 +241,7 @@ class OpenXR:
                 return self._app.destroy()
         self._lib = None
         self._app = None
+        return True
 
     def is_session_running(self) -> bool:
         """

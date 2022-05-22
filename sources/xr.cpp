@@ -784,7 +784,7 @@ public:
 	OpenXrApplication();
 	~OpenXrApplication();
 
-    void destroy();
+    bool destroy();
 
 	bool createInstance(const string &, const string &, const vector<string> &, const vector<string> &);
 	bool getSystem(XrFormFactor, XrEnvironmentBlendMode, XrViewConfigurationType); 
@@ -815,7 +815,7 @@ OpenXrApplication::~OpenXrApplication(){
 	destroy();
 }
 
-void OpenXrApplication::destroy(){
+bool OpenXrApplication::destroy(){
 	if(xr_instance != NULL){
 		std::cout << "Destroying OpenXR application" << std::endl;
 		
@@ -840,6 +840,7 @@ void OpenXrApplication::destroy(){
 
 		std::cout << "OpenXR application destroyed" << std::endl;
 	}
+	return true;
 }
 
 bool OpenXrApplication::defineLayers(const vector<string> & requestedApiLayers, vector<string> & enabledApiLayers){
@@ -2263,8 +2264,12 @@ int main(){
 #ifdef CTYPES
 extern "C"
 {
-    OpenXrApplication * openXrApplication(){ return new OpenXrApplication(); }
-    void destroy(OpenXrApplication * app){ app->destroy(); }
+    OpenXrApplication * openXrApplication(){ 
+		return new OpenXrApplication(); 
+	}
+    bool destroy(OpenXrApplication * app){ 
+		return app->destroy(); 
+	}
 
 	// utils
     bool isSessionRunning(OpenXrApplication * app){ 
