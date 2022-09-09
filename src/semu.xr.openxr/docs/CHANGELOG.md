@@ -2,7 +2,7 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.0.3-beta] - Unreleased
+## [0.0.3-beta] - 2022-09-09
 ### Added
 - Add `disable_openxr` flag to configuration settings for testing the extension
 
