@@ -1,5 +1,6 @@
 import math
 import pxr
+import carb
 import weakref
 import omni.ext
 import omni.ui as ui
@@ -10,6 +11,10 @@ from semu.xr.openxr import _openxr
 
 class Extension(omni.ext.IExt):
     def on_startup(self, ext_id):
+        # get extension settings
+        self._settings = carb.settings.get_settings()
+        self._disable_openxr = self._settings.get("/exts/semu.xr.openxr/disable_openxr")
+
         self._window = None
         self._menu_items = [MenuItemDescription(name="OpenXR UI", onclick_fn=lambda a=weakref.proxy(self): a._menu_callback())]
         add_menu_items(self._menu_items, "Add-ons")
@@ -67,7 +72,7 @@ class Extension(omni.ext.IExt):
         self._xr_settings_view_configuration_type.enabled = False
 
         if self._xr is None:
-            self._xr = _openxr.acquire_openxr_interface()
+            self._xr = _openxr.acquire_openxr_interface(disable_openxr=self._disable_openxr)
             if not self._xr.init(graphics=graphics, use_ctypes=False):
                 print("[ERROR] OpenXR.init with graphics: {}".format(graphics))
 
