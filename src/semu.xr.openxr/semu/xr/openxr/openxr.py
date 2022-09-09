@@ -60,8 +60,8 @@ XR_MIN_HAPTIC_DURATION = -1
 XR_FREQUENCY_UNSPECIFIED = 0
 
 
-def acquire_openxr_interface():
-    return OpenXR()
+def acquire_openxr_interface(disable_openxr: bool = False):
+    return OpenXR(disable_openxr)
 
 def release_openxr_interface(xr):
     if xr is not None:
@@ -115,7 +115,11 @@ class ActionPoseState(ctypes.Structure):
 
 
 class OpenXR:
-    def __init__(self) -> None:
+    def __init__(self, disable_openxr: bool = False) -> None:
+        self._disable_openxr = disable_openxr
+        if self._disable_openxr:
+            print("[WARNING] Extension launched with OpenXR support disabled")
+
         self._lib = None
         self._app = None
 
@@ -163,6 +167,13 @@ class OpenXR:
         bool
             True if initialization was successful, otherwise False
         """
+        # get viewport interface
+        try:
+            self._viewport_interface = omni.kit.viewport.get_viewport_interface()
+        except Exception as e:
+            print("[INFO] Using legacy viewport interface")
+            self._viewport_interface = omni.kit.viewport_legacy.get_viewport_interface()
+
         # TODO: what about no graphic API (only controllers for example)?
         self._use_ctypes = use_ctypes
         # graphics API
@@ -189,6 +200,9 @@ class OpenXR:
         else:
             extension_path = __file__[:__file__.find("/semu/xr/openxr")]
         
+        if self._disable_openxr:
+            return True
+
         try:
             # ctypes
             if self._use_ctypes:
@@ -218,13 +232,7 @@ class OpenXR:
         except Exception as e:
             print("[ERROR] OpenXR initialization:", e)
             return False
-        
-        try:
-            self._viewport_interface = omni.kit.viewport.get_viewport_interface()
-        except Exception as e:
-            print("[WARNING] omni.kit.viewport.get_viewport_interface:", e)
-            print("[WARNING] Using legacy omni.kit.viewport_legacy.get_viewport_interface")
-            self._viewport_interface = omni.kit.viewport_legacy.get_viewport_interface()
+
         return True
 
     def destroy(self) -> bool:
@@ -254,6 +262,9 @@ class OpenXR:
         bool
             Return True if the OpenXR session is running, False otherwise
         """
+        if self._disable_openxr:
+            return True
+
         if self._use_ctypes:
             return bool(self._lib.isSessionRunning(self._app))
         else:
@@ -286,6 +297,9 @@ class OpenXR:
         bool
             True if the instance has been created successfully, otherwise False
         """
+        if self._disable_openxr:
+            return True
+
         if self._graphics not in extensions:
             extensions += [self._graphics]
         
@@ -349,6 +363,9 @@ class OpenXR:
             raise ValueError("Invalid view configuration type ({}). Valid view configuration types are XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO ({}), XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO ({})" \
                              .format(view_configuration_type, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO))
 
+        if self._disable_openxr:
+            return True
+
         if self._use_ctypes:
             return bool(self._lib.getSystem(self._app, form_factor, blend_mode, view_configuration_type))
         else:
@@ -375,6 +392,9 @@ class OpenXR:
         bool
             True if the session has been created successfully, otherwise False
         """
+        if self._disable_openxr:
+            return True
+
         if self._use_ctypes:
             return bool(self._lib.createSession(self._app))
         else:
@@ -394,6 +414,9 @@ class OpenXR:
         bool
             False if the running session needs to end (due to the user closing or switching the application, etc.), otherwise False
         """
+        if self._disable_openxr:
+            return True
+
         if self._use_ctypes:
             exit_loop = ctypes.c_bool(False)
             result = bool(self._lib.pollEvents(self._app, ctypes.byref(exit_loop)))
@@ -418,6 +441,9 @@ class OpenXR:
         bool
             True if there is no error during polling, otherwise False
         """
+        if self._disable_openxr:
+            return True
+
         if self._use_ctypes:
             requested_action_states = (ActionState * len(self._callback_action_events.keys()))()
             result = bool(self._lib.pollActions(self._app, requested_action_states, len(requested_action_states)))
@@ -482,8 +508,17 @@ class OpenXR:
             True if there is no error during rendering, otherwise False
         """
         if self._callback_render is None:
-            print("[WARNING] No callback has been established for rendering events. Internal callback will be used")
+            print("[INFO] No callback has been established for rendering events. Internal callback will be used")
             self.subscribe_render_event()
+
+        if self._disable_openxr:
+            frame_left = sensors.get_rgb(self._viewport_window_left)
+            frame_right = sensors.get_rgb(self._viewport_window_right)
+            print(frame_left.shape, frame_right.shape)
+            cv2.imshow("frame_left", frame_left)
+            cv2.imshow("frame_right", frame_right)
+            cv2.waitKey(1)
+            return True
 
         if self._use_ctypes:
             requested_action_pose_states = (ActionPoseState * len(self._callback_action_pose_events.keys()))()
@@ -584,6 +619,9 @@ class OpenXR:
         if action_type == XR_ACTION_TYPE_POSE_INPUT:
             self._callback_action_pose_events[path] = callback
         
+        if self._disable_openxr:
+            return True
+
         if self._use_ctypes:
             return bool(self._lib.addAction(self._app, ctypes.create_string_buffer(path.encode('utf-8')), action_type, reference_space))
         else:
@@ -612,6 +650,10 @@ class OpenXR:
         amplitude = haptic_feedback.get("amplitude", 0.5)
         duration = haptic_feedback.get("duration", XR_MIN_HAPTIC_DURATION)
         frequency = haptic_feedback.get("frequency", XR_FREQUENCY_UNSPECIFIED)
+
+        if self._disable_openxr:
+            return True
+
         if self._use_ctypes:
             amplitude = ctypes.c_float(amplitude)
             duration = ctypes.c_int64(duration)
@@ -637,6 +679,9 @@ class OpenXR:
         bool
             True if there is no error during the haptic feedback stop, otherwise False
         """
+        if self._disable_openxr:
+            return True
+
         if self._use_ctypes:
             return bool(self._lib.stopHapticFeedback(self._app, ctypes.create_string_buffer(path.encode('utf-8'))))
         else:
@@ -747,6 +792,9 @@ class OpenXR:
             Tuple containing the recommended resolutions (width, height) of each device view.
             If the tuple length is 2, index 0 represents the left eye and index 1 represents the right eye
         """
+        if self._disable_openxr:
+            return ([512, 512], [1024, 1024])
+
         if self._use_ctypes:
             num_views = self._lib.getViewConfigurationViewsSize(self._app)
             views = (XrViewConfigurationView * num_views)()
@@ -955,6 +1003,9 @@ class OpenXR:
         if callback is None:
             self._callback_render = _internal_render
         
+        if self._disable_openxr:
+            return
+
         if self._use_ctypes:
             self._callback_middle_render = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.POINTER(XrView), ctypes.POINTER(XrViewConfigurationView))(self._callback_render)
             self._lib.setRenderCallback(self._app, self._callback_middle_render)
@@ -986,6 +1037,10 @@ class OpenXR:
             True if there is no error during the passing to the selected graphics API, otherwise False
         """
         use_rgba = True if left.shape[2] == 4 else False
+
+        if self._disable_openxr:
+            return True
+
         if self._use_ctypes:
             self._frame_left = self._transform(configuration_views[0], left)
             if right is None:
