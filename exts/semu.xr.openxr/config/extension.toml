@@ -3,7 +3,7 @@ reloadable = true
 order = 0
 
 [package]
-version = "0.0.2-beta"
+version = "0.0.3-beta"
 category = "Other"
 feature = false
 app = false
@@ -31,9 +31,6 @@ python = ["py37", "cp37"]
 "omni.kit.menu.utils" = {}
 "omni.kit.window.viewport" = {}
 
-[python.pipapi]
-requirements = ["opencv-python"]
-
 [[python.module]]
 name = "semu.xr.openxr"
 
@@ -42,3 +39,10 @@ name = "semu.xr.openxr_ui"
 
 [[python.module]]
 name = "semu.xr.openxr.tests"
+
+[python.pipapi]
+requirements = ["opencv-python"]
+use_online_index = true
+
+[settings]
+exts."semu.xr.openxr".disable_openxr = false
