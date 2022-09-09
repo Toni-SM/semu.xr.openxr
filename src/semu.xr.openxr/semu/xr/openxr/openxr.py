@@ -12,7 +12,7 @@ if __name__ != "__main__":
     import pxr
     import omni
     from pxr import UsdGeom, Gf, Usd
-    from omni.syntheticdata import sensors
+    from omni.syntheticdata import sensors, _syntheticdata
 else:
     class pxr:
         class Gf:
@@ -512,12 +512,15 @@ class OpenXR:
             self.subscribe_render_event()
 
         if self._disable_openxr:
-            frame_left = sensors.get_rgb(self._viewport_window_left)
-            frame_right = sensors.get_rgb(self._viewport_window_right)
-            print(frame_left.shape, frame_right.shape)
-            cv2.imshow("frame_left", frame_left)
-            cv2.imshow("frame_right", frame_right)
-            cv2.waitKey(1)
+            # test sensor reading
+            if self._viewport_window_left is not None:
+                frame_left = sensors.get_rgb(self._viewport_window_left)
+                cv2.imshow("frame_left {}".format(frame_left.shape), frame_left)
+                cv2.waitKey(1)
+            if self._viewport_window_right is not None:
+                frame_right = sensors.get_rgb(self._viewport_window_right)
+                cv2.imshow("frame_right {}".format(frame_right.shape), frame_right)
+                cv2.waitKey(1)
             return True
 
         if self._use_ctypes:
@@ -782,6 +785,12 @@ class OpenXR:
             if right_camera is not None:
                 self._prim_right.GetAttribute(property).Set(camera_properties[property])
         
+        # enable sensors
+        if self._viewport_window_left is not None:
+            sensors.enable_sensors(self._viewport_window_left, [_syntheticdata.SensorType.Rgb])
+        if self._viewport_window_right is not None:
+            sensors.enable_sensors(self._viewport_window_right, [_syntheticdata.SensorType.Rgb])
+
     def get_recommended_resolutions(self) -> tuple:
         """
         Get the recommended resolution of the display device
