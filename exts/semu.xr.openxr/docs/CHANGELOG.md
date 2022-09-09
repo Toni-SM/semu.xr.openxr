@@ -2,7 +2,14 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.2.0-beta] - 2022-05-22
+## [0.0.3-beta] - 2022-09-09
+### Added
+- Add `disable_openxr` flag to configuration settings for testing the extension
+
+### Fixed
+- Enable RGB sensors when setting up mono/stereo views 
+
+## [0.0.2-beta] - 2022-05-22
 ### Added
 - Source code (src folder)
 
