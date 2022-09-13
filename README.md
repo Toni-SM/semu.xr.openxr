@@ -35,6 +35,7 @@
     - [```get_recommended_resolutions```](#method-get_recommended_resolutions)
     - [```set_reference_system_pose```](#method-set_reference_system_pose)
     - [```set_stereo_rectification```](#method-set_stereo_rectification)
+    - [```set_meters_per_unit```](#method-set_meters_per_unit)
     - [```set_frame_transformations```](#method-set_frame_transformations)
     - [```teleport_prim```](#method-teleport_prim)
     - [```subscribe_render_event```](#method-subscribe_render_event)
@@ -367,7 +368,7 @@ The following functions are provided on the OpenXR interface:
      | ```XR_ACTION_TYPE_BOOLEAN_INPUT``` | ```bool``` |
      | ```XR_ACTION_TYPE_FLOAT_INPUT``` | ```float``` |
      | ```XR_ACTION_TYPE_VECTOR2F_INPUT``` (x, y) | ```tuple(float, float)``` |
-     | ```XR_ACTION_TYPE_POSE_INPUT``` (position (in centimeters), rotation as quaternion) | ```tuple(pxr.Gf.Vec3d, pxr.Gf.Quatd)``` |
+     | ```XR_ACTION_TYPE_POSE_INPUT``` (position (in stage unit), rotation as quaternion) | ```tuple(pxr.Gf.Vec3d, pxr.Gf.Quatd)``` |
 
   ```XR_ACTION_TYPE_VIBRATION_OUTPUT``` actions will not invoke their callback function. In this case the callback must be None
      
@@ -506,7 +507,7 @@ The following functions are provided on the OpenXR interface:
   Parameters:
   - position: ```pxr.Gf.Vec3d``` or ```None```, optional
 
-    Cartesian position (in centimeters) (default: ```None```)
+    Cartesian position (in stage unit) (default: ```None```)
   
   - rotation: ```pxr.Gf.Vec3d``` or ```None```, optional
     
@@ -531,6 +532,18 @@ The following functions are provided on the OpenXR interface:
   - x: ```float```, optional
     
     Angle (in radians) of the Z-axis (default: 0)
+
+<a name="method-set_meters_per_unit"></a>
+- Specify the meters per unit to be applied to transformations
+
+  ```python
+  set_meters_per_unit(meters_per_unit: float) -> None
+  ```
+  
+  Parameters:
+  - meters_per_unit: ```float```
+    
+    Meters per unit. E.g.: 1 meter is 1.0, 1 centimeter is 0.01
 
 <a name="method-set_frame_transformations"></a>
 - Specify the transformations to be applied to the rendered images
@@ -562,7 +575,7 @@ The following functions are provided on the OpenXR interface:
     
   - position: ```pxr.Gf.Vec3d```
     
-    Cartesian position (in centimeters) used to transform the prim
+    Cartesian position (in stage unit) used to transform the prim
     
   - rotation: ```pxr.Gf.Quatd```
     
@@ -570,7 +583,7 @@ The following functions are provided on the OpenXR interface:
     
   - reference_position: ```pxr.Gf.Vec3d``` or ```None```, optional
     
-    Cartesian position (in centimeters) used as reference system (default: ```None```)
+    Cartesian position (in stage unit) used as reference system (default: ```None```)
     
   - reference_rotation: ```pxr.Gf.Vec3d``` or ```None```, optional
     
