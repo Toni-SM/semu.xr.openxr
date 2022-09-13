@@ -4,7 +4,7 @@
 
 <br>
 
-**Target applications:** Any NVIDIA Omniverse app with the `omni.syntheticdata` extension installed (e.g., Isaac Sim, Create, etc.)
+**Target applications:** Any NVIDIA Omniverse app with the `omni.syntheticdata` extension installed (e.g., Isaac Sim, Code, etc.)
 
 **Supported OS:** Linux
 
@@ -45,7 +45,7 @@
 
 <br>
 
-![showcase](https://user-images.githubusercontent.com/22400377/169348883-c0a7461d-9fe2-45af-8c77-4e6d6c105062.png)
+![showcase](exts/semu.xr.openxr/data/preview.png)
 
 <hr>
 
@@ -82,7 +82,7 @@
 High-level overview of extension usage, including the order of function calls, callbacks and the action and rendering loop
 
 <p align="center">
-  <img src="https://user-images.githubusercontent.com/22400377/137474691-cdc1aeee-2c34-40ef-82f2-f2aa13587c45.png" width="55%">
+  <img src="https://user-images.githubusercontent.com/22400377/190011524-27ae7023-6c49-4e00-986f-03e087bd9ac1.png" width="55%">
 </p>
 
 Typical OpenXR application showing the grouping of the standard functions under the compact binding provided by the extension (adapted from [openxr-10-reference-guide.pdf](https://www.khronos.org/registry/OpenXR/specs/1.0/refguide/openxr-10-reference-guide.pdf))
@@ -534,7 +534,7 @@ The following functions are provided on the OpenXR interface:
     Angle (in radians) of the Z-axis (default: 0)
 
 <a name="method-set_meters_per_unit"></a>
-- Specify the meters per unit to be applied to transformations
+- Specify the meters per unit to be applied to transformations (default: 1.0)
 
   ```python
   set_meters_per_unit(meters_per_unit: float) -> None
