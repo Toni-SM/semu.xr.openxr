@@ -134,6 +134,7 @@ class OpenXR:
         self._viewport_window_left = None
         self._viewport_window_right = None
 
+        self._meters_per_unit = 1.0
         self._reference_position = Gf.Vec3d(0, 0, 0)
         self._reference_rotation = Gf.Vec3d(0, 0, 0)
         self._rectification_quat_left = Gf.Quatd(1, 0, 0, 0)
@@ -530,7 +531,7 @@ class OpenXR:
             for state in requested_action_pose_states:
                 value = None
                 if state.type == XR_ACTION_TYPE_POSE_INPUT and state.isActive:
-                    value = (Gf.Vec3d(state.pose.position.x, -state.pose.position.z, state.pose.position.y) * 100,
+                    value = (Gf.Vec3d(state.pose.position.x, -state.pose.position.z, state.pose.position.y) / self._meters_per_unit,
                              Gf.Quatd(state.pose.orientation.w, state.pose.orientation.x, state.pose.orientation.y, state.pose.orientation.z))
                     self._callback_action_pose_events[state.path.decode("utf-8")](state.path.decode("utf-8"), value)
             return result
@@ -541,7 +542,7 @@ class OpenXR:
             for state in result[1]:
                 value = None
                 if state["type"] == XR_ACTION_TYPE_POSE_INPUT and state["isActive"]:
-                    value = (Gf.Vec3d(state["pose"]["position"]["x"], -state["pose"]["position"]["z"], state["pose"]["position"]["y"]) * 100,
+                    value = (Gf.Vec3d(state["pose"]["position"]["x"], -state["pose"]["position"]["z"], state["pose"]["position"]["y"]) / self._meters_per_unit,
                              Gf.Quatd(state["pose"]["orientation"]["w"], state["pose"]["orientation"]["x"], state["pose"]["orientation"]["y"], state["pose"]["orientation"]["z"]))
                     self._callback_action_pose_events[state["path"]](state["path"], value)
             return result[0]
@@ -567,7 +568,7 @@ class OpenXR:
            - XR_ACTION_TYPE_BOOLEAN_INPUT: bool
            - XR_ACTION_TYPE_FLOAT_INPUT: float 
            - XR_ACTION_TYPE_VECTOR2F_INPUT (x, y): tuple(float, float)
-           - XR_ACTION_TYPE_POSE_INPUT (position (in centimeters), rotation as quaternion): tuple(pxr.Gf.Vec3d, pxr.Gf.Quatd)
+           - XR_ACTION_TYPE_POSE_INPUT (position (in stage unit), rotation as quaternion): tuple(pxr.Gf.Vec3d, pxr.Gf.Quatd)
 
         XR_ACTION_TYPE_VIBRATION_OUTPUT actions will not invoke their callback function. In this case the callback must be None
         XR_ACTION_TYPE_POSE_INPUT also specifies, through the definition of the reference_space parameter, the reference space used to retrieve the pose
@@ -821,7 +822,7 @@ class OpenXR:
         Parameters
         ----------
         position: pxr.Gf.Vec3d or None, optional
-            Cartesian position (in centimeters) (default: None)
+            Cartesian position (in stage unit) (default: None)
         rotation: pxr.Gf.Vec3d or None, optional
             Rotation (in degress) on each axis (default: None)
         """
@@ -853,16 +854,30 @@ class OpenXR:
             self._rectification_quat_left *= pxr.Gf.Quatd(np.cos(z/2), 0, 0, np.sin(z/2))
             self._rectification_quat_right *= pxr.Gf.Quatd(np.cos(-z/2), 0, 0, np.sin(-z/2))
 
+    def set_meters_per_unit(self, meters_per_unit: float):
+        """
+        Specify the meters per unit to be applied to transformations
+
+        E.g. 1 meter: 1.0, 1 centimeter: 0.01
+        
+        Parameters
+        ----------
+        meters_per_unit: float
+            Meters per unit
+        """
+        assert meters_per_unit != 0
+        self._meters_per_unit = meters_per_unit
+
     def set_frame_transformations(self, fit: bool = False, flip: Union[int, tuple, None] = None) -> None:
         """
         Specify the transformations to be applied to the rendered images
 
         Parameters
         ----------
-        fit: bool, optionl
+        fit: bool, optional
             Adjust each rendered image to the recommended resolution of the display device by cropping and scaling the image from its center (default: False)
             OpenCV.resize method with INTER_LINEAR interpolation will be used to scale the image to the recommended resolution
-        flip: int, tuple or None, optionl
+        flip: int, tuple or None, optional
             Flip each image around vertical (0), horizontal (1), or both axes (0,1) (default: None) 
         """
         self._transform_fit = fit
@@ -877,11 +892,11 @@ class OpenXR:
         prim: pxr.Usd.Prim
             Target prim
         position: pxr.Gf.Vec3d
-            Cartesian position (in centimeters) used to transform the prim
+            Cartesian position (in stage unit) used to transform the prim
         rotation: pxr.Gf.Quatd
             Rotation (as quaternion) used to transform the prim
         reference_position: pxr.Gf.Vec3d or None, optional
-            Cartesian position (in centimeters) used as reference system (default: None)
+            Cartesian position (in stage unit) used as reference system (default: None)
         reference_rotation: pxr.Gf.Vec3d or None, optional
             Rotation (in degress) on each axis used as reference system (default: None)
         """
@@ -988,7 +1003,7 @@ class OpenXR:
             # teleport left camera
             position = views[0].pose.position
             rotation = views[0].pose.orientation
-            position = Gf.Vec3d(position.x, -position.z, position.y) * 100
+            position = Gf.Vec3d(position.x, -position.z, position.y) / self._meters_per_unit
             rotation = Gf.Quatd(rotation.w, rotation.x, rotation.y, rotation.z) * self._rectification_quat_left
             self.teleport_prim(self._prim_left, position, rotation, self._reference_position, self._reference_rotation)            
 
@@ -996,7 +1011,7 @@ class OpenXR:
             if num_views == 2:
                 position = views[1].pose.position
                 rotation = views[1].pose.orientation
-                position = Gf.Vec3d(position.x, -position.z, position.y) * 100
+                position = Gf.Vec3d(position.x, -position.z, position.y) / self._meters_per_unit
                 rotation = Gf.Quatd(rotation.w, rotation.x, rotation.y, rotation.z) * self._rectification_quat_right
                 self.teleport_prim(self._prim_right, position, rotation, self._reference_position, self._reference_rotation)
             
