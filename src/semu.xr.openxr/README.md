@@ -53,10 +53,16 @@ Typical OpenXR application showing the grouping of the standard functions under 
 
 ```python
 import omni
+from pxr import UsdGeom
 from semu.xr.openxr import _openxr
 
-# create a sphere to mirror the controller's pose
+# get stage unit
+stage = omni.usd.get_context().get_stage()
+meters_per_unit = UsdGeom.GetStageMetersPerUnit(stage)
+
+# create a sphere (1 centimeter radius) to mirror the controller's pose
 sphere_prim = omni.usd.get_context().get_stage().DefinePrim("/sphere", "Sphere")
+sphere_prim.GetAttribute("radius").Set(0.01 / meters_per_unit)
 
 # acquire interface
 xr = _openxr.acquire_openxr_interface()
@@ -70,8 +76,8 @@ xr.get_system()
 def on_action_event(path, value):
     # process controller's trigger
     if path == "/user/hand/left/input/trigger/value":
-      # modify the sphere's radius (from 1 o 10 centimeters) according to the controller's trigger position
-      sphere_prim.GetAttribute("radius").Set(value * 9 + 1)
+      # modify the sphere's radius (from 1 to 10 centimeters) according to the controller's trigger position
+      sphere_prim.GetAttribute("radius").Set((value * 9 + 1) * 0.01 / meters_per_unit)
       # apply haptic vibration when the controller's trigger is fully depressed
       if value == 1:
         xr.apply_haptic_feedback("/user/hand/left/output/haptic", {"duration": _openxr.XR_MIN_HAPTIC_DURATION})
@@ -80,7 +86,7 @@ def on_action_event(path, value):
         xr.teleport_prim(sphere_prim, value[0], value[1])
 
 # subscribe controller actions (haptic actions don't require callbacks) 
-xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=on_action_event, reference_space=_openxr.XR_REFERENCE_SPACE_TYPE_STAGE)
+xr.subscribe_action_event("/user/hand/left/input/grip/pose", callback=on_action_event, reference_space=_openxr.XR_REFERENCE_SPACE_TYPE_LOCAL)
 xr.subscribe_action_event("/user/hand/left/input/trigger/value", callback=on_action_event)
 xr.subscribe_action_event("/user/hand/left/output/haptic")
 
@@ -88,6 +94,7 @@ xr.subscribe_action_event("/user/hand/left/output/haptic")
 xr.create_session()
 
 # setup cameras and viewports and prepare rendering using the internal callback
+xr.set_meters_per_unit(meters_per_unit)
 xr.setup_stereo_view()
 xr.set_frame_transformations(flip=0)
 xr.set_stereo_rectification(y=0.05)
@@ -96,7 +103,7 @@ xr.set_stereo_rectification(y=0.05)
 def on_simulation_step(step):
     if xr.poll_events() and xr.is_session_running():
         xr.poll_actions()
-        xr.render_views(_openxr.XR_REFERENCE_SPACE_TYPE_STAGE)
+        xr.render_views(_openxr.XR_REFERENCE_SPACE_TYPE_LOCAL)
 
 physx_subs = omni.physx.get_physx_interface().subscribe_physics_step_events(on_simulation_step)
 ```
