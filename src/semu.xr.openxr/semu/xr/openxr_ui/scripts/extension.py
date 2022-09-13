@@ -1,9 +1,12 @@
 import math
-import pxr
-import carb
 import weakref
+
+import pxr
+import omni
+import carb
 import omni.ext
 import omni.ui as ui
+from pxr import UsdGeom
 from omni.kit.menu.utils import add_menu_items, remove_menu_items, MenuItemDescription
 
 from semu.xr.openxr import _openxr
@@ -35,7 +38,7 @@ class Extension(omni.ext.IExt):
         return reference_space[self._xr_settings_reference_space.model.get_item_value_model().as_int]
 
     def _get_origin_pose(self):
-        space_origin_position = [self._xr_settings_space_origin_position.model.get_item_value_model(i).as_int for i in self._xr_settings_space_origin_position.model.get_item_children()]
+        space_origin_position = [self._xr_settings_space_origin_position.model.get_item_value_model(i).as_float for i in self._xr_settings_space_origin_position.model.get_item_children()]
         space_origin_rotation = [self._xr_settings_space_origin_rotation.model.get_item_value_model(i).as_int for i in self._xr_settings_space_origin_rotation.model.get_item_children()]
         return {"position": pxr.Gf.Vec3d(*space_origin_position), "rotation": pxr.Gf.Vec3d(*space_origin_rotation)}
 
@@ -75,6 +78,10 @@ class Extension(omni.ext.IExt):
             self._xr = _openxr.acquire_openxr_interface(disable_openxr=self._disable_openxr)
             if not self._xr.init(graphics=graphics, use_ctypes=False):
                 print("[ERROR] OpenXR.init with graphics: {}".format(graphics))
+
+            # set stage unit
+            stage = omni.usd.get_context().get_stage()
+            self._xr.set_meters_per_unit(UsdGeom.GetStageMetersPerUnit(stage))
 
             # setup OpenXR application using default and ui parameters
             if self._xr.create_instance():
@@ -168,8 +175,8 @@ class Extension(omni.ext.IExt):
                         ui.Label("Space origin:", width=85)
                     ui.Spacer(height=5)
                     with ui.HStack(height=0):
-                        ui.Label("  |-- Position (in centimeters):", width=165, tooltip="Cartesian position (in centimeters) used as reference origin")
-                        self._xr_settings_space_origin_position = ui.MultiIntDragField(0, 0, 0, step=1)
+                        ui.Label("  |-- Position (in stage unit):", width=165, tooltip="Cartesian position (in stage unit) used as reference origin")
+                        self._xr_settings_space_origin_position = ui.MultiFloatDragField(0.0, 0.0, 0.0, step=0.1)
                     ui.Spacer(height=5)
                     with ui.HStack(height=0):
                         ui.Label("  |-- Rotation (XYZ):", width=110, tooltip="Rotation (in degress) on each axis used as reference origin")
