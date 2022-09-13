@@ -1543,6 +1543,9 @@ bool OpenXrApplication::defineSwapchains(){
 			break;
 	}
 
+	if((selectedSwapchainFormats == -1) && swapchainFormats.size())
+		selectedSwapchainFormats = swapchainFormats[0];
+
 	std::cout << "Swapchain formats (" << swapchainFormats.size() << ")" << std::endl;
 	for (size_t i = 0; i < swapchainFormats.size(); i++){
 		std::cout << "  |-- format: " << swapchainFormats[i] << std::endl;
