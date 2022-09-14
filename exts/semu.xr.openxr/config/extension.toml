@@ -3,7 +3,7 @@ reloadable = true
 order = 0
 
 [package]
-version = "0.0.3-beta"
+version = "0.0.4-beta"
 category = "Other"
 feature = false
 app = false
