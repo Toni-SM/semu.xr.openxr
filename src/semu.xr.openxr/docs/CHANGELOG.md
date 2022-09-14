@@ -2,6 +2,13 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.4-beta] - 2022-09-14
+### Added
+- Add `set_meters_per_unit` method for specifying the unit factor to be applied to transformations
+
+### Changed
+- Use float input field for getting the reference position from UI
+
 ## [0.0.3-beta] - 2022-09-09
 ### Added
 - Add `disable_openxr` flag to configuration settings for testing the extension
