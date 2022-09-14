@@ -6,6 +6,8 @@
 
 **Target applications:** Any NVIDIA Omniverse app with the `omni.syntheticdata` extension installed (e.g., Isaac Sim, Code, etc.)
 
+  - *Tested in Ubuntu 18.04/20.04, STEAMVR beta 1.24.3, Omniverse Code 2022.1.3 and Isaac Sim 2022.1.1*
+
 **Supported OS:** Linux
 
 **Changelog:** [CHANGELOG.md](exts/semu.xr.openxr/docs/CHANGELOG.md)
@@ -155,7 +157,7 @@ def on_simulation_step(step):
 physx_subs = omni.physx.get_physx_interface().subscribe_physics_step_events(on_simulation_step)
 ```
 
-[Watch the sample video](https://user-images.githubusercontent.com/22400377/136706132-cc96dc22-235d-454d-a145-a65f6a35c9f2.mp4)
+[Watch the sample video](https://user-images.githubusercontent.com/22400377/190255669-d1e05833-e7c0-4ec7-9bd8-956188fe7053.mp4)
 
 <hr>
 
@@ -169,7 +171,7 @@ The first four options (Graphics API, Form factor, Blend mode, View configuratio
 The other options (under the central separator) can be modified while the application is running. They help to modify the pose of the reference system, or to perform transformations on the images to be rendered, for example.
 
 <p align="center">
-  <img src="https://user-images.githubusercontent.com/22400377/137474713-b148ded7-0ece-4d8c-aa30-79244920cf64.png" width="65%">
+  <img src="https://user-images.githubusercontent.com/22400377/190108800-c5b701cd-05ea-41d5-9e5d-726049021eb8.png" width="65%">
 </p>
 
 <hr>
