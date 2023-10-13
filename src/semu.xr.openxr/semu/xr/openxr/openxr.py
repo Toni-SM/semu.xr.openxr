@@ -131,6 +131,10 @@ class OpenXR:
         self._prim_right = None
         self._frame_left = None
         self._frame_right = None
+        self._cam_left = None
+        self._cam_right = None
+        self._viewport_left = None
+        self._viewport_right = None
         self._viewport_window_left = None
         self._viewport_window_right = None
 
@@ -139,8 +143,6 @@ class OpenXR:
         self._reference_rotation = Gf.Vec3d(0, 0, 0)
         self._rectification_quat_left = Gf.Quatd(1, 0, 0, 0)
         self._rectification_quat_right = Gf.Quatd(1, 0, 0, 0)
-
-        self._viewport_interface = None
 
         self._transform_fit = None
         self._transform_flip = None
@@ -168,13 +170,6 @@ class OpenXR:
         bool
             True if initialization was successful, otherwise False
         """
-        # get viewport interface
-        try:
-            self._viewport_interface = omni.kit.viewport.get_viewport_interface()
-        except Exception as e:
-            print("[INFO] Using legacy viewport interface")
-            self._viewport_interface = omni.kit.viewport_legacy.get_viewport_interface()
-
         # TODO: what about no graphic API (only controllers for example)?
         self._use_ctypes = use_ctypes
         # graphics API
@@ -515,11 +510,11 @@ class OpenXR:
         if self._disable_openxr:
             # test sensor reading
             if self._viewport_window_left is not None:
-                frame_left = sensors.get_rgb(self._viewport_window_left)
+                frame_left = self._cam_left.get_rgba()
                 cv2.imshow("frame_left {}".format(frame_left.shape), frame_left)
                 cv2.waitKey(1)
             if self._viewport_window_right is not None:
-                frame_right = sensors.get_rgb(self._viewport_window_right)
+                frame_right = self._cam_right.get_rgba()
                 cv2.imshow("frame_right {}".format(frame_right.shape), frame_right)
                 cv2.waitKey(1)
             return True
@@ -724,41 +719,53 @@ class OpenXR:
             Dictionary containing the [camera properties](https://docs.omniverse.nvidia.com/app_create/prod_materials-and-rendering/cameras.html#camera-properties) supported by the Omniverse kit to be set (default: {"focalLength": 10})
         """
         def get_or_create_vieport_window(camera, teleport=True, window_size=(400, 300), resolution=(1280, 720)):
-            window = None
-            camera = str(camera.GetPath() if type(camera) is Usd.Prim else camera)
+
+            camera_path = str(camera.GetPath() if type(camera) is Usd.Prim else camera)
+
+            translation: Gf.Vec3d = [1,1,1]
+            # rotation: Gf.Rotation = [1.0,0,0.0,0.0] 
+
+            if type(camera) is Usd.Prim and not teleport:
+                matrix: Gf.Matrix4d = omni.usd.get_world_transform_matrix(camera)
+                translation: Gf.Vec3d = matrix.ExtractTranslation()
+                # rotation: Gf.Rotation = matrix.ExtractRotation()            
+
+            camera_sensor = omni.isaac.sensor.Camera(prim_path=camera_path,
+                position=translation,
+                resolution=resolution,
+                # orientation=rotation,
+            )
+
+            camera_name = camera_path.split("/")[-1]
+
             # get viewport window
-            for interface in self._viewport_interface.get_instance_list():
-                w = self._viewport_interface.get_viewport_window(interface)
-                if camera == w.get_active_camera():
-                    window = w
-                    # check visibility
-                    if not w.is_visible():
-                        w.set_visible(True)
-                    break
-            # create viewport window if not exist
-            if window is None:
-                window = self._viewport_interface.get_viewport_window(self._viewport_interface.create_instance())
-                window.set_window_size(*window_size)
-                window.set_active_camera(camera)
-                window.set_texture_resolution(*resolution)
-                if teleport:
-                    window.set_camera_position(camera, 1.0, 1.0, 1.0, True)
-                    window.set_camera_target(camera, 0.0, 0.0, 0.0, True)
-            return window
+            viewport = omni.kit.viewport.utility.get_viewport_from_window_name(camera_name)
+            if viewport is None:
+                viewport = omni.ui.Window(camera_name, width=window_size[0], height=window_size[1] + 20) # Add 20 for the title-bar
+            
+            with viewport.frame:
+                viewport_widget = omni.kit.widget.viewport.ViewportWidget(resolution = window_size)
+            viewport_api = viewport_widget.viewport_api
+            viewport_api.resolution = resolution
+            viewport_api.camera_path = camera_path
+                
+            return viewport, viewport_widget, camera_sensor
         
         stage = omni.usd.get_context().get_stage()
 
         # left camera
         teleport_camera = False
         self._prim_left = None
+
         if type(left_camera) is Usd.Prim:
-            self._prim_left = left_camera
+            self._prim_path = left_camera.GetPrimPath()
         elif stage.GetPrimAtPath(left_camera).IsValid():
             self._prim_left = stage.GetPrimAtPath(left_camera)
         else:
             teleport_camera = True
             self._prim_left = stage.DefinePrim(omni.usd.get_stage_next_free_path(stage, left_camera, False), "Camera")
-        self._viewport_window_left = get_or_create_vieport_window(self._prim_left, teleport=teleport_camera)
+        self._viewport_left, self._viewport_window_left, self._cam_left = get_or_create_vieport_window(self._prim_left, teleport=teleport_camera)
+        self._prim_left.GetAttribute("clippingRange").Set( (0.01, 1000000) )
 
         # right camera
         teleport_camera = False
@@ -771,14 +778,8 @@ class OpenXR:
             else:
                 teleport_camera = True
                 self._prim_right = stage.DefinePrim(omni.usd.get_stage_next_free_path(stage, right_camera, False), "Camera")
-            self._viewport_window_right = get_or_create_vieport_window(self._prim_right, teleport=teleport_camera)
-
-        # set recommended resolution
-        resolutions = self.get_recommended_resolutions()
-        if len(resolutions) and self._viewport_window_left is not None:
-            self._viewport_window_left.set_texture_resolution(*resolutions[0])
-        if len(resolutions) == 2 and self._viewport_window_right is not None:
-            self._viewport_window_right.set_texture_resolution(*resolutions[1])
+            self._viewport_right, self._viewport_window_right, self._cam_right = get_or_create_vieport_window(self._prim_right, teleport=teleport_camera)
+            self._prim_right.GetAttribute("clippingRange").Set( (0.01, 1000000) )
 
         # set camera properties
         for property in camera_properties:
@@ -786,12 +787,6 @@ class OpenXR:
             if right_camera is not None:
                 self._prim_right.GetAttribute(property).Set(camera_properties[property])
         
-        # enable sensors
-        if self._viewport_window_left is not None:
-            sensors.enable_sensors(self._viewport_window_left, [_syntheticdata.SensorType.Rgb])
-        if self._viewport_window_right is not None:
-            sensors.enable_sensors(self._viewport_window_right, [_syntheticdata.SensorType.Rgb])
-
     def get_recommended_resolutions(self) -> tuple:
         """
         Get the recommended resolution of the display device
@@ -1014,11 +1009,21 @@ class OpenXR:
                 position = Gf.Vec3d(position.x, -position.z, position.y) / self._meters_per_unit
                 rotation = Gf.Quatd(rotation.w, rotation.x, rotation.y, rotation.z) * self._rectification_quat_right
                 self.teleport_prim(self._prim_right, position, rotation, self._reference_position, self._reference_rotation)
-            
+
+            #Reset Camera Resolution as its overwritten somehow if set in the stereo setup
+            resolutions = self.get_recommended_resolutions()
+            if len(resolutions) and self._cam_left is not None:
+                self._cam_left.resolution = resolutions[0]
+            if len(resolutions) == 2 and self._cam_right is not None:
+                self._cam_right.resolution = resolutions[1]
+
             # set frames
             try:
-                frame_left = sensors.get_rgb(self._viewport_window_left)
-                frame_right = sensors.get_rgb(self._viewport_window_right) if num_views == 2 else None
+                frame_left = self._cam_left.get_rgba()
+                frame_right = self._cam_right.get_rgba()
+                if frame_left.shape[0] == 0 or frame_right.shape[0] == 0:
+                    print("Skipping Frame")
+                    return
                 self.set_frames(configuration_views, frame_left, frame_right)
             except Exception as e:
                 print("[ERROR]", str(e))
